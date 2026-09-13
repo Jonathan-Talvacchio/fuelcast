@@ -11,7 +11,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: update-data
+  group: pages
   cancel-in-progress: false
 
 jobs:
@@ -44,3 +44,26 @@ jobs:
             git commit -m "data: refresh prices $(date -u +%Y-%m-%d)"
             git push
           fi
+
+  # Commits made with GITHUB_TOKEN don't trigger other workflows, so deploy here
+  # rather than relying on the push-triggered Pages workflow.
+  deploy:
+    needs: update
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: .
+      - id: deployment
+        uses: actions/deploy-pages@v4
