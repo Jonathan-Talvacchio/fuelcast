@@ -1,0 +1,46 @@
+name: Update price data
+
+on:
+  schedule:
+    # Daily at 21:00 UTC — after EIA posts Monday's weekly retail prices (~5pm ET)
+    # and after the daily spot prices for the prior trading day are in.
+    - cron: '0 21 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: update-data
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Run tests
+        run: node --test scripts/test-predict.mjs
+
+      - name: Fetch latest prices
+        env:
+          EIA_API_KEY: ${{ secrets.EIA_API_KEY }}
+          DATA_PROVIDER: ${{ vars.DATA_PROVIDER || 'eia' }}
+        run: node scripts/fetch-data.mjs
+
+      - name: Commit if changed
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/prices.json
+          if git diff --cached --quiet; then
+            echo "No data changes."
+          else
+            git commit -m "data: refresh prices $(date -u +%Y-%m-%d)"
+            git push
+          fi

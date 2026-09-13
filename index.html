@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Full Tank — When should you fill up?</title>
+  <meta name="description" content="Should you buy gas today or wait? See today's average gas price in your area, tomorrow's and this week's predicted prices, a deal score, and where prices are headed.">
+  <meta name="theme-color" content="#1f6feb">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⛽</text></svg>">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="wrap header-row">
+      <a class="brand" href="./" aria-label="Full Tank home">
+        <span class="brand-icon" aria-hidden="true">⛽</span>
+        <span class="brand-name">Full Tank</span>
+      </a>
+      <p class="tagline">Buy gas at the right time.</p>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <section class="controls card" aria-label="Choose your area">
+      <label class="control">
+        <span class="control-label">Your area</span>
+        <select id="areaSelect" aria-describedby="areaNote"></select>
+      </label>
+      <button id="locateBtn" class="btn" type="button">
+        <span aria-hidden="true">📍</span> Use my location
+      </button>
+      <p id="areaNote" class="note" hidden></p>
+    </section>
+
+    <div id="status" class="status" role="status" aria-live="polite"></div>
+
+    <div id="content" hidden>
+      <section class="verdict card" id="verdictCard" data-verdict="ok">
+        <div class="verdict-text">
+          <p class="eyebrow">Recommendation for <strong id="areaName">—</strong></p>
+          <h1 id="verdictLabel">—</h1>
+          <p class="why">Because <span id="verdictWhy">—</span>.</p>
+          <p id="reason" class="reason">—</p>
+          <p class="asof">Latest reported average: <strong id="lastReported">—</strong> on <span id="asOfDate">—</span><span id="stale"></span></p>
+        </div>
+        <div class="score" id="scoreBox" aria-label="Deal score">
+          <svg class="ring" viewBox="0 0 120 120" role="img" aria-labelledby="scoreTitle">
+            <title id="scoreTitle">Deal score</title>
+            <circle class="ring-track" cx="60" cy="60" r="52"></circle>
+            <circle class="ring-fill" id="ringFill" cx="60" cy="60" r="52"></circle>
+            <text class="ring-num" id="scoreNum" x="60" y="60">—</text>
+            <text class="ring-cap" x="60" y="82">/ 100</text>
+          </svg>
+          <span class="score-label">Deal score</span>
+          <span class="score-sub" id="scoreSub">—</span>
+        </div>
+      </section>
+
+      <section class="strip" aria-label="Price outlook">
+        <div class="tile">
+          <span class="tile-label">Today <small>(est.)</small></span>
+          <span class="tile-value" id="pToday">—</span>
+          <span class="tile-delta" id="dToday">per gallon, regular</span>
+        </div>
+        <div class="tile">
+          <span class="tile-label">Tomorrow <small>(predicted)</small></span>
+          <span class="tile-value" id="pTomorrow">—</span>
+          <span class="tile-delta" id="dTomorrow">—</span>
+        </div>
+        <div class="tile">
+          <span class="tile-label">This week avg <small>(predicted)</small></span>
+          <span class="tile-value" id="pThisWeek">—</span>
+          <span class="tile-delta" id="dThisWeek">—</span>
+        </div>
+        <div class="tile">
+          <span class="tile-label">Next week avg <small>(predicted)</small></span>
+          <span class="tile-value" id="pNextWeek">—</span>
+          <span class="tile-delta" id="dNextWeek">—</span>
+        </div>
+      </section>
+
+      <section class="card chart-card">
+        <div class="card-head">
+          <h2>Price trend</h2>
+          <p class="muted">Last 13 weeks of reported averages and the next two weeks as predicted, with an uncertainty range.</p>
+        </div>
+        <div class="chart-wrap"><canvas id="chart" aria-label="Gas price history and projection chart" role="img"></canvas></div>
+        <ul class="legend" aria-hidden="true">
+          <li><span class="swatch swatch-actual"></span> Reported weekly average</li>
+          <li><span class="swatch swatch-proj"></span> Predicted</li>
+          <li><span class="swatch swatch-band"></span> Likely range</li>
+        </ul>
+        <details class="table-details">
+          <summary>View as table</summary>
+          <div class="table-scroll"><table id="dataTable"><thead><tr><th>Date</th><th>Price</th><th>Type</th></tr></thead><tbody></tbody></table></div>
+        </details>
+      </section>
+
+      <div class="grid2">
+        <section class="card">
+          <h2>What's driving prices</h2>
+          <ul class="drivers" id="drivers"></ul>
+        </section>
+        <section class="card">
+          <h2>Last 90 days in <span id="areaName2">your area</span></h2>
+          <dl class="range">
+            <div><dt>Low</dt><dd id="rLow">—</dd></div>
+            <div><dt>Average</dt><dd id="rAvg">—</dd></div>
+            <div><dt>High</dt><dd id="rHigh">—</dd></div>
+          </dl>
+          <div class="range-bar" aria-hidden="true"><span class="range-marker" id="rMarker"></span></div>
+          <p class="muted" id="rNote">—</p>
+          <h3>Official outlook</h3>
+          <p class="muted">EIA's monthly forecast for your region, adjusted to your area's typical difference from it.</p>
+          <ul class="outlook" id="outlook"></ul>
+        </section>
+      </div>
+
+      <section class="card how">
+        <h2>How this works</h2>
+        <p>Every day we pull the latest <strong>weekly average retail price for regular gasoline</strong> from the U.S. Energy Information Administration (EIA) for your metro, state, or region, along with EIA's daily wholesale gasoline and crude oil prices and its official monthly price outlook.</p>
+        <p>The prediction is a simple, transparent estimate: recent momentum in your area's price, the direction wholesale gasoline has moved over the last couple of weeks (pump prices usually follow with a short lag), and — further out — EIA's monthly forecast for your region. The <strong>deal score</strong> asks two questions: how does today's price compare with the last 90 days in your area, and are prices expected to rise or fall over the next two weeks? A high score means "cheap now and likely to get pricier," so fill up.</p>
+        <p class="tip"><strong>Tip:</strong> station prices often creep up ahead of the weekend; early-week fill-ups tend to be a little cheaper. Shop around too — the spread between the cheapest and priciest station in town is usually bigger than any day-to-day move.</p>
+      </section>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="wrap">
+      <p class="disclaimer"><strong>Disclaimer:</strong> Full Tank exists only to help you decide when to buy gas. All prices shown are area-wide averages, and all predictions are estimates based on public data and simple statistical rules. They are <strong>not guaranteed</strong>, can be wrong, and are not financial advice. Actual prices at any station will differ. Use your own judgment.</p>
+      <p class="muted">Data: <a id="sourceLink" href="https://www.eia.gov/petroleum/gasdiesel/" rel="noopener">U.S. Energy Information Administration</a>. Retail prices are weekly averages of regular gasoline. Data updated <span id="updatedAt">—</span>. Your area choice is saved in your browser only.</p>
+    </div>
+  </footer>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.5.1/chart.umd.min.js"></script>
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
