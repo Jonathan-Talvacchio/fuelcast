@@ -50,6 +50,10 @@ Tests for the prediction logic and region mapping:
 node --test scripts/test-predict.mjs
 ```
 
+## Design
+
+See [docs/DESIGN.md](docs/DESIGN.md) for goals, architecture, the data contract, the prediction model, and future work.
+
 ## Project layout
 
 ```
