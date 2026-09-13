@@ -209,7 +209,11 @@ const SWEEP = [
   ['verdictMove', [0.01, 0.02, 0.03, 0.05]],
   ['momentumPoints', [4, 6, 8, 12]],
   ['leadLookbackDays', [5, 10, 15]],
+  ['momentumDecayDays', [5, 7, 10, 14, 28, Infinity]],
+  ['bandScale', [1, 1.25, 1.5]],
 ];
+
+const DEFAULTS = { ...MODEL };
 
 function withModel(overrides, fn) {
   const saved = { ...MODEL };
@@ -241,8 +245,8 @@ if (flag('sweep')) {
     for (const v of values) {
       const m = withModel({ [key]: v }, () => metrics(walk(history)));
       sweep.push({ key, value: v, ...m });
-      console.log(`${key}=${String(v).padEnd(5)}  saved ${c(m.savedVsNow).padStart(5)}¢  captured ${pct(m.captured).padStart(6)}  `
-        + `dir ${pct(m.dirHit)}  1wk MAE ${c(m.mae7)}¢  wait ${pct(m.waitShare)}`);
+      console.log(`${key}=${String(v).padEnd(8)}  saved ${c(m.savedVsNow).padStart(5)}¢  captured ${pct(m.captured).padStart(6)}  `
+        + `dir ${pct(m.dirHit)}  MAE 1wk ${c(m.mae7)}¢ 2wk ${c(m.mae14)}¢  band ${pct(m.in7)}/${pct(m.in14)}  wait ${pct(m.waitShare)}`);
     }
   }
 }
@@ -279,10 +283,10 @@ function renderReport(m, m0, areas, sweep, history) {
   for (const a of areas) lines.push(`| ${a.name} | ${c(a.savedVsNow)}¢ | ${pct(a.dirHit)} | ${c(a.mae7)}¢ / ${c(a.naive7)}¢ |`);
   if (sweep.length) {
     lines.push('', '## Constant sweep (one at a time, others at default)', '',
-      '| Constant | Value | Saved vs always-now | Of oracle | Direction right | 1wk MAE | Wait share |', '|---|---|---|---|---|---|---|');
+      '| Constant | Value | Saved vs always-now | Of oracle | Direction right | MAE 1wk / 2wk | Band 1wk / 2wk | Wait share |', '|---|---|---|---|---|---|---|---|');
     for (const s of sweep) {
-      const isDefault = s.value === ({ passThrough: 0.7, verdictMove: 0.02, momentumPoints: 6, leadLookbackDays: 10 })[s.key];
-      lines.push(`| \`${s.key}\` | ${s.value}${isDefault ? ' (default)' : ''} | ${c(s.savedVsNow)}¢ | ${pct(s.captured)} | ${pct(s.dirHit)} | ${c(s.mae7)}¢ | ${pct(s.waitShare)} |`);
+      const isDefault = s.value === DEFAULTS[s.key];
+      lines.push(`| \`${s.key}\` | ${s.value}${isDefault ? ' (default)' : ''} | ${c(s.savedVsNow)}¢ | ${pct(s.captured)} | ${pct(s.dirHit)} | ${c(s.mae7)}¢ / ${c(s.mae14)}¢ | ${pct(s.in7)} / ${pct(s.in14)} | ${pct(s.waitShare)} |`);
     }
   }
   lines.push('', '## Caveats', '',

@@ -10,6 +10,8 @@ const DAY_MS = 86400000;
 export const MODEL = {
   momentumPoints: 6,        // regression window (data points)
   maxSlopePerDay: 0.02,     // $/gal/day cap on momentum
+  momentumDecayDays: Infinity, // momentum fades with this time constant (Infinity = extrapolate linearly)
+  bandScale: 1,             // multiplier on the uncertainty band
   passThrough: 0.7,         // share of wholesale move that reaches the pump
   leadLookbackDays: 10,     // trading days of wholesale change to consider
   leadMaxEffect: 0.25,      // $/gal cap on wholesale effect
@@ -86,6 +88,13 @@ export function wholesaleLead(rbob) {
   const last = rbob[rbob.length - 1].price;
   const prior = rbob[Math.max(0, rbob.length - 1 - MODEL.leadLookbackDays)].price;
   return clamp((last - prior) * MODEL.passThrough, -MODEL.leadMaxEffect, MODEL.leadMaxEffect);
+}
+
+// Cumulative momentum effect after d days: m·d when linear, saturating at
+// m·τ when a decay time constant τ is set.
+function momentumEffect(slope, d) {
+  const tau = MODEL.momentumDecayDays;
+  return Number.isFinite(tau) ? slope * tau * (1 - Math.exp(-d / tau)) : slope * d;
 }
 
 function leadRamp(d) {
@@ -181,7 +190,7 @@ export function analyze({ series, outlook, regionSeries, wholesale, now = Date.n
   const projection = [];
   for (let d = 0; d <= horizon; d++) {
     const ms = asOfMs + d * DAY_MS;
-    let price = latest.price + slope * d + lead * leadRamp(d);
+    let price = latest.price + momentumEffect(slope, d) + lead * leadRamp(d);
     if (hasOutlook) {
       const anchor = latest.price + (outlookAt(outlook, ms) - outlookBase);
       if (Number.isFinite(anchor)) {
@@ -189,7 +198,7 @@ export function analyze({ series, outlook, regionSeries, wholesale, now = Date.n
         price = price * (1 - w) + anchor * w;
       }
     }
-    const half = d === 0 ? 0 : sd * Math.sqrt(d / stepDays);
+    const half = d === 0 ? 0 : MODEL.bandScale * sd * Math.sqrt(d / stepDays);
     projection.push({ date: isoDate(ms), day: d, price, low: price - half, high: price + half });
   }
   const at = d => projection[Math.min(d, projection.length - 1)].price;
