@@ -10,8 +10,9 @@ const DAY_MS = 86400000;
 export const MODEL = {
   momentumPoints: 6,        // regression window (data points)
   maxSlopePerDay: 0.02,     // $/gal/day cap on momentum
-  momentumDecayDays: Infinity, // momentum fades with this time constant (Infinity = extrapolate linearly)
+  momentumDecayDays: 7,     // momentum fades with this time constant (backtested: see docs/BACKTEST.md)
   bandScale: 1,             // multiplier on the uncertainty band
+  bandExponent: 0.5,        // band grows with (days / stepDays) ** exponent (0.5 = random walk)
   passThrough: 0.7,         // share of wholesale move that reaches the pump
   leadLookbackDays: 10,     // trading days of wholesale change to consider
   leadMaxEffect: 0.25,      // $/gal cap on wholesale effect
@@ -198,7 +199,7 @@ export function analyze({ series, outlook, regionSeries, wholesale, now = Date.n
         price = price * (1 - w) + anchor * w;
       }
     }
-    const half = d === 0 ? 0 : MODEL.bandScale * sd * Math.sqrt(d / stepDays);
+    const half = d === 0 ? 0 : MODEL.bandScale * sd * (d / stepDays) ** MODEL.bandExponent;
     projection.push({ date: isoDate(ms), day: d, price, low: price - half, high: price + half });
   }
   const at = d => projection[Math.min(d, projection.length - 1)].price;

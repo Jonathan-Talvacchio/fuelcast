@@ -210,7 +210,8 @@ const SWEEP = [
   ['momentumPoints', [4, 6, 8, 12]],
   ['leadLookbackDays', [5, 10, 15]],
   ['momentumDecayDays', [5, 7, 10, 14, 28, Infinity]],
-  ['bandScale', [1, 1.25, 1.5]],
+  ['bandScale', [1, 1.25]],
+  ['bandExponent', [0.5, 0.65, 0.8, 1.0]],
 ];
 
 const DEFAULTS = { ...MODEL };
