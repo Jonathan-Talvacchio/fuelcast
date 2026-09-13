@@ -44,6 +44,13 @@ then open <http://localhost:8765>. To refresh the data locally:
 node scripts/fetch-data.mjs
 ```
 
+Backtest the model against 10 years of EIA history (needs `EIA_API_KEY` set; the
+**Backtest model** workflow does the same in CI and commits [docs/BACKTEST.md](docs/BACKTEST.md)):
+
+```bash
+node scripts/backtest.mjs --sweep --report
+```
+
 Tests for the prediction logic and region mapping:
 
 ```bash

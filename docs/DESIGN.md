@@ -2,7 +2,7 @@
 
 **Status:** Live at <https://jonathan-talvacchio.github.io/fuelcast/>
 **Repo:** <https://github.com/Jonathan-Talvacchio/fuelcast>
-**Last updated:** 2026-09-13
+**Last updated:** 2026-09-13 (backtest added)
 
 ## 1. Overview
 
@@ -141,7 +141,10 @@ runs unchanged in the browser. Let `P₀` be the latest reported price on date
 `asOf`, and `d` the number of days after `asOf`.
 
 **Momentum.** Weighted least-squares slope `m` ($/day) over the last 6 reports,
-weights 1…6 (most recent heaviest), clamped to ±$0.02/day.
+weights 1…6 (most recent heaviest), clamped to ±$0.02/day. Its effect fades with a
+one-week time constant rather than extrapolating forever:
+`mom(d) = m × 7 × (1 − e^(−d/7))` — so it contributes at most a week's worth of drift.
+(Backtested: linear extrapolation made the 2-week forecast worse than "no change".)
 
 **Wholesale lead.** `L = clamp(0.7 × (RBOB_now − RBOB_10 trading days ago), ±$0.25)`.
 Pump prices follow wholesale with a lag, so `L` is applied on a ramp from day 2
@@ -152,13 +155,15 @@ to a daily curve `O(t)`. Only its *trajectory* is used, never its level (a forec
 published early in the month can sit well above or below this week's pump price):
 `A(d) = P₀ + O(asOf + d) − O(asOf)`.
 
-**Projection.** `raw(d) = P₀ + m·d + lead(d)`, then blended toward the anchor with
+**Projection.** `raw(d) = P₀ + mom(d) + lead(d)`, then blended toward the anchor with
 weight `w(d) = clamp((d − 7) / 23, 0, 1)`:
 `price(d) = (1 − w)·raw(d) + w·A(d)`. So days 0–7 are pure momentum + wholesale;
 by day 30 the projection follows EIA's outlook shape.
 
 **Uncertainty band.** `σ` = standard deviation of the last 12 report-to-report
-changes (floor $0.02); `band(d) = ±σ·√(d / stepDays)`.
+changes (floor $0.02); `band(d) = ±σ·(d / stepDays)`. The band grows linearly with
+the horizon, not as √d: backtesting showed a random-walk band caught only 53% of
+2-week outcomes, while linear growth calibrates both horizons at ≈68%.
 
 **Derived numbers.** With `d₀` = days since `asOf` (today):
 today = `price(d₀)`, tomorrow = `price(d₀+1)`, this week = mean of days `d₀+1…d₀+7`,
@@ -184,6 +189,27 @@ Decoupling verdict from score was a deliberate fix: an earlier version derived t
 verdict from the score alone and could say "wait" while predicting a rise.
 
 All constants live in one `MODEL` object so they can be tuned in one place.
+
+### 7.1 Backtest evidence
+
+`scripts/backtest.mjs` walks forward through 10 years of EIA history (15,080 weekly
+decisions across all 29 areas) using only the data that existed on each date; the
+outlook anchor is disabled because past forecast vintages are unavailable. The
+**Backtest model** workflow reruns it with the real API key and commits
+[`docs/BACKTEST.md`](BACKTEST.md). Headline results with the current constants:
+
+| Metric | Result |
+|---|---|
+| Direction of the predicted 2-week move | right 72% of the time (base rate 49%) |
+| 1-week forecast error | 5.0¢ vs 5.5¢ for "no change" |
+| Band coverage, 1 wk / 2 wk | 68% / 67% (target 68%) |
+| Following the verdict vs always buying now | saves 1.28¢/gal on average; 50% of what perfect foresight would save |
+| "Wait" calls | 40% of weeks, right 78% of the time, 3.2¢/gal saved each |
+
+The wholesale lead is the single most valuable input: momentum alone gets 64%
+direction accuracy and half the savings. The constant sweep found `passThrough`,
+`verdictMove`, `momentumPoints` and `leadLookbackDays` near their optimum; the
+two changes it motivated were momentum decay and linear band growth.
 
 ## 8. User interface
 
@@ -248,8 +274,8 @@ Breakpoints at 760px (single column, 2×2 price tiles, shorter chart) and 400px
    commercial feeds (station-level). With daily data the "today" estimate becomes an
    observation.
 2. **Custom domain** — DNS A/CNAME records to GitHub Pages; no code change.
-3. **Backtesting** — replay the last two years of weekly data through the model and
-   report how often the verdict beat "fill on a random day," to calibrate the constants.
+3. **Backtesting the outlook anchor** — needs archived STEO vintages (EIA publishes
+   them as monthly files, not through the API); would let the full model be tested.
 4. **Fuel grades / diesel** — EIA publishes the same series for midgrade, premium and
    diesel; a grade selector is a small extension of the provider and UI.
 5. **Model refinements** — day-of-week seasonality if a daily source is added;
