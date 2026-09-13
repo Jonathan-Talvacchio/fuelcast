@@ -1,6 +1,6 @@
-# ⛽ Full Tank
+# ⛽ Fuelcast
 
-**Should you fill up today, or wait?** Full Tank shows today's average gas price
+**Should you fill up today, or wait?** Fuelcast shows today's average gas price
 for your area, tomorrow's and this week's predicted prices, a deal score, and where
 prices are headed — using free public data, hosted for free on GitHub Pages.
 
@@ -74,6 +74,6 @@ variable. No changes to the site itself.
 
 ## Disclaimer
 
-Full Tank exists only to help you decide when to buy gas. Prices are area-wide
+Fuelcast exists only to help you decide when to buy gas. Prices are area-wide
 averages and predictions are estimates that are **not guaranteed**. Not financial
 advice.

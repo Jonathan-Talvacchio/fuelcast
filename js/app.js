@@ -3,7 +3,7 @@ import { analyze, parseDate } from './predict.js';
 import { renderChart, fillTable } from './chart.js';
 
 const DATA_URL = 'data/prices.json';
-const STORAGE_KEY = 'fulltank.selection';
+const STORAGE_KEY = 'fuelcast.selection';
 const STALE_DAYS = 10;
 const DAY_MS = 86400000;
 
@@ -200,7 +200,7 @@ function render(selectionValue) {
   fillTable($('dataTable').querySelector('tbody'), r);
 
   $('content').hidden = false;
-  document.title = `${r.verdict.label} · ${sel.label} · Full Tank`;
+  document.title = `${r.verdict.label} · ${sel.label} · Fuelcast`;
 }
 
 // ---- Geolocation ------------------------------------------------------------
