@@ -2,15 +2,17 @@
 //
 //   node scripts/backtest.mjs                 # all areas, last 10 years, default constants
 //   node scripts/backtest.mjs --years 5       # shorter window
-//   node scripts/backtest.mjs --sweep         # also try alternative constants
+//   node scripts/backtest.mjs --sweep         # also try alternative constants (every grade)
+//   node scripts/backtest.mjs --grade diesel  # only this grade
 //   node scripts/backtest.mjs --report        # write docs/BACKTEST.md
 //   node scripts/backtest.mjs --refresh       # re-download history (cached in .cache/)
 //   node scripts/backtest.mjs --site-data     # offline smoke test using data/prices.json
 //
-// What is tested: the momentum + wholesale-lead core of js/predict.js, walking
-// forward one weekly report at a time with only the data that existed on that
-// date (retail reports up to and including the report date, RBOB spot prices
-// dated on or before it). The EIA outlook anchor is disabled: only the current
+// What is tested: the momentum + wholesale-lead core of js/predict.js, for each
+// fuel grade, walking forward one weekly report at a time with only the data
+// that existed on that date (retail reports up to and including the report
+// date, and the grade's wholesale spot series — RBOB for gasoline, ULSD for
+// diesel — dated on or before it). The EIA outlook anchor is disabled: only the current
 // forecast vintage is available, and using it for past dates would leak the
 // future into the test.
 //
@@ -29,14 +31,17 @@ import { existsSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { analyze, MODEL, parseDate } from '../js/predict.js';
-import { AREAS } from '../js/regions.js';
+import { AREAS, GRADES } from '../js/regions.js';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const args = process.argv.slice(2);
 const flag = n => args.includes(`--${n}`);
 const opt = (n, d) => { const i = args.indexOf(`--${n}`); return i >= 0 ? args[i + 1] : d; };
 const YEARS = Number(opt('years', 10));
-const CACHE = resolve(root, '.cache/backtest-history.json');
+const ONLY_GRADE = opt('grade', null);
+if (ONLY_GRADE && !GRADES[ONLY_GRADE]) { console.error(`Unknown grade ${ONLY_GRADE}`); process.exit(1); }
+const GRADE_IDS = Object.keys(GRADES).filter(g => !ONLY_GRADE || g === ONLY_GRADE);
+const CACHE = resolve(root, '.cache/backtest-history-v2.json');
 const API_KEY = process.env.EIA_API_KEY || 'DEMO_KEY';
 const DAY = 86400000;
 
@@ -74,10 +79,15 @@ async function eiaAll(route, params) {
 }
 
 async function loadHistory() {
-  if (flag('site-data')) {   // offline smoke test on the site's own data file (2y retail, 90d RBOB)
+  if (flag('site-data')) {   // offline smoke test on the site's own data file (2y retail, 90d spot)
     const d = JSON.parse(await readFile(resolve(root, 'data/prices.json'), 'utf8'));
-    const areas = Object.fromEntries(Object.entries(d.areas).map(([id, a]) => [id, a.weekly]));
-    return { years: 2, fetchedAt: d.generatedAt, areas, rbob: d.wholesale.rbob };
+    const grades = {};
+    for (const g of Object.keys(GRADES)) {
+      const areas = {};
+      for (const [id, a] of Object.entries(d.areas)) if (a.prices?.[g]) areas[id] = a.prices[g].weekly;
+      grades[g] = areas;
+    }
+    return { years: 2, fetchedAt: d.generatedAt, grades, spot: { rbob: d.wholesale.rbob, ulsd: d.wholesale.ulsd || [] } };
   }
   if (existsSync(CACHE) && !flag('refresh')) {
     const cached = JSON.parse(await readFile(CACHE, 'utf8'));
@@ -86,26 +96,39 @@ async function loadHistory() {
   const start = new Date(Date.now() - (YEARS + 0.5) * 365.25 * DAY).toISOString().slice(0, 10);
   console.error(`Downloading ${YEARS}y of history from EIA (start ${start})…`);
   const areaIds = Object.keys(AREAS);
+  const productToGrade = Object.fromEntries(Object.entries(GRADES).map(([g, x]) => [x.product, g]));
   const weeklyRows = await eiaAll('petroleum/pri/gnd', {
-    frequency: 'weekly', 'data[0]': 'value', 'facets[product][]': 'EPMR',
+    frequency: 'weekly', 'data[0]': 'value', 'facets[product][]': Object.values(GRADES).map(g => g.product),
     'facets[duoarea][]': areaIds, start, 'sort[0][column]': 'period', 'sort[0][direction]': 'asc',
   });
-  const areas = {};
+  const grades = Object.fromEntries(Object.keys(GRADES).map(g => [g, {}]));
   for (const r of weeklyRows) {
     const price = Number(r.value);
-    if (!areaIds.includes(r.duoarea) || !Number.isFinite(price)) continue;
-    (areas[r.duoarea] ||= []).push({ date: r.period, price });
+    const g = productToGrade[r.product];
+    if (!g || !areaIds.includes(r.duoarea) || !Number.isFinite(price)) continue;
+    (grades[g][r.duoarea] ||= []).push({ date: r.period, price });
   }
-  for (const s of Object.values(areas)) s.sort((a, b) => a.date.localeCompare(b.date));
+  for (const areas of Object.values(grades)) {
+    for (const [id, s] of Object.entries(areas)) {
+      s.sort((a, b) => a.date.localeCompare(b.date));
+      if (s.length < WARMUP + 10) delete areas[id];
+    }
+  }
 
+  const SPOT = { rbob: 'EER_EPMRU_PF4_Y35NY_DPG', ulsd: 'EER_EPD2DXL0_PF4_Y35NY_DPG' };
   const spotRows = await eiaAll('petroleum/pri/spt', {
-    frequency: 'daily', 'data[0]': 'value', 'facets[series][]': 'EER_EPMRU_PF4_Y35NY_DPG',
+    frequency: 'daily', 'data[0]': 'value', 'facets[series][]': Object.values(SPOT),
     start, 'sort[0][column]': 'period', 'sort[0][direction]': 'asc',
   });
-  const rbob = spotRows.map(r => ({ date: r.period, price: Number(r.value) }))
-    .filter(p => Number.isFinite(p.price)).sort((a, b) => a.date.localeCompare(b.date));
+  const spot = { rbob: [], ulsd: [] };
+  for (const r of spotRows) {
+    const k = Object.keys(SPOT).find(k => SPOT[k] === r.series);
+    const price = Number(r.value);
+    if (k && Number.isFinite(price)) spot[k].push({ date: r.period, price });
+  }
+  for (const s of Object.values(spot)) s.sort((a, b) => a.date.localeCompare(b.date));
 
-  const data = { years: YEARS, fetchedAt: new Date().toISOString(), areas, rbob };
+  const data = { years: YEARS, fetchedAt: new Date().toISOString(), grades, spot };
   await mkdir(dirname(CACHE), { recursive: true });
   await writeFile(CACHE, JSON.stringify(data));
   return data;
@@ -116,11 +139,12 @@ async function loadHistory() {
 const WARMUP = 26;       // reports before the first evaluation
 const RBOB_WINDOW = 90;  // days of spot history handed to the model (as on the site)
 
-function walk(history, useWholesale = true) {
+function walk(history, grade, useWholesale = true, onlyArea = null) {
   const rows = [];
-  const rbobAll = history.rbob;
-  let ri = 0; // moving pointer into rbob (sorted)
-  for (const [area, series] of Object.entries(history.areas)) {
+  const rbobAll = history.spot[GRADES[grade].lead] || [];
+  let ri = 0; // moving pointer into the spot series (sorted)
+  for (const [area, series] of Object.entries(history.grades[grade])) {
+    if (onlyArea && area !== onlyArea) continue;
     ri = 0;
     for (let t = WARMUP; t < series.length - 2; t++) {
       const asOf = series[t].date;
@@ -132,7 +156,7 @@ function walk(history, useWholesale = true) {
       const p7 = r.projection[7], p14 = r.projection[14];
       const a0 = series[t].price, a1 = series[t + 1].price, a2 = series[t + 2].price;
       rows.push({
-        area, asOf, a0, a1, a2,
+        grade, area, asOf, a0, a1, a2,
         f7: p7.price, f14: p14.price, lo7: p7.low, hi7: p7.high, lo14: p14.low, hi14: p14.high,
         change14: r.change14, verdict: r.verdict.key, score: r.score,
       });
@@ -225,74 +249,95 @@ function withModel(overrides, fn) {
 // ---- Main -------------------------------------------------------------------
 
 const history = await loadHistory();
-const base = metrics(walk(history));
-printMetrics(base, `Default constants (retail momentum + wholesale lead, no outlook)`);
-const noWholesale = metrics(walk(history, false));
-printMetrics(noWholesale, 'Without the wholesale lead (momentum only)');
+const results = {};   // grade → { base, noWholesale, perArea, sweep }
+for (const grade of GRADE_IDS) {
+  if (!history.grades[grade] || !Object.keys(history.grades[grade]).length) { console.log(`\n(no ${grade} history)`); continue; }
+  const name = GRADES[grade].name;
+  const base = metrics(walk(history, grade));
+  printMetrics(base, `${name}: default constants (momentum + ${GRADES[grade].lead.toUpperCase()} lead, no outlook)`);
+  const noWholesale = metrics(walk(history, grade, false));
+  printMetrics(noWholesale, `${name}: momentum only`);
 
-const perArea = Object.entries(history.areas).map(([id]) => {
-  const m = metrics(walk({ areas: { [id]: history.areas[id] }, rbob: history.rbob }));
-  return { id, name: AREAS[id].name, ...m };
-}).sort((a, b) => b.savedVsNow - a.savedVsNow);
-console.log('\n== Per area (¢/gal saved vs always-now · direction hit rate · 1wk MAE vs no-change) ==');
-for (const a of perArea) {
-  console.log(`${a.name.padEnd(32)} ${c(a.savedVsNow).padStart(6)}¢   ${pct(a.dirHit).padStart(6)}   ${c(a.mae7)}¢ vs ${c(a.naive7)}¢`);
-}
+  const perArea = Object.keys(history.grades[grade]).map(id => {
+    const m = metrics(walk(history, grade, true, id));
+    return { id, name: AREAS[id].name, ...m };
+  }).sort((a, b) => b.savedVsNow - a.savedVsNow);
+  console.log(`\n== ${name} per area (¢/gal saved vs always-now · direction hit rate · 1wk MAE vs no-change) ==`);
+  for (const a of perArea) {
+    console.log(`${a.name.padEnd(32)} ${c(a.savedVsNow).padStart(6)}¢   ${pct(a.dirHit).padStart(6)}   ${c(a.mae7)}¢ vs ${c(a.naive7)}¢`);
+  }
 
-let sweep = [];
-if (flag('sweep')) {
-  console.log('\n== Sweep (one constant at a time) ==');
-  for (const [key, values] of SWEEP) {
-    for (const v of values) {
-      const m = withModel({ [key]: v }, () => metrics(walk(history)));
-      sweep.push({ key, value: v, ...m });
-      console.log(`${key}=${String(v).padEnd(8)}  saved ${c(m.savedVsNow).padStart(5)}¢  captured ${pct(m.captured).padStart(6)}  `
-        + `dir ${pct(m.dirHit)}  MAE 1wk ${c(m.mae7)}¢ 2wk ${c(m.mae14)}¢  band ${pct(m.in7)}/${pct(m.in14)}  wait ${pct(m.waitShare)}`);
+  const sweep = [];
+  if (flag('sweep')) {
+    console.log(`\n== ${name} sweep (one constant at a time) ==`);
+    for (const [key, values] of SWEEP) {
+      for (const v of values) {
+        const m = withModel({ [key]: v }, () => metrics(walk(history, grade)));
+        sweep.push({ key, value: v, ...m });
+        console.log(`${key}=${String(v).padEnd(8)}  saved ${c(m.savedVsNow).padStart(5)}¢  captured ${pct(m.captured).padStart(6)}  `
+          + `dir ${pct(m.dirHit)}  MAE 1wk ${c(m.mae7)}¢ 2wk ${c(m.mae14)}¢  band ${pct(m.in7)}/${pct(m.in14)}  wait ${pct(m.waitShare)}`);
+      }
     }
   }
+  results[grade] = { base, noWholesale, perArea, sweep };
 }
 
 if (flag('report')) {
-  const md = renderReport(base, noWholesale, perArea, sweep, history);
+  const md = renderReport(results);
   const out = resolve(root, 'docs/BACKTEST.md');
   await writeFile(out, md);
   console.log(`\nWrote ${out}`);
 }
 
-function renderReport(m, m0, areas, sweep, history) {
+function renderReport(results) {
   const row = (label, x) => `| ${label} | ${c(x.mae7)}¢ / ${c(x.naive7)}¢ | ${c(x.mae14)}¢ / ${c(x.naive14)}¢ | ${pct(x.in7)} / ${pct(x.in14)} | ${pct(x.dirHit)} (${pct(x.calledShare)} called) | ${c(x.savedVsNow)}¢ | ${pct(x.captured)} |`;
+  const first = Object.values(results)[0].base;
   const lines = [];
   lines.push('# Backtest results', '',
     `Generated ${new Date().toISOString().slice(0, 10)} by \`node scripts/backtest.mjs --sweep --report\` `
-    + `on ${YEARS} years of EIA history (${m.from} → ${m.to}), ${m.n.toLocaleString()} weekly decisions across ${m.areas} areas.`, '',
+    + `on ${YEARS} years of EIA history (${first.from} → ${first.to}), evaluated separately for each fuel grade.`, '',
     '## Method', '',
-    'Walk forward one weekly report at a time, giving the model only what existed on that date: retail reports up to the report date and NY Harbor RBOB spot prices dated on or before it (the same 90-day window the site uses). The EIA outlook anchor is **disabled** — only the current forecast vintage is available, and using it for past dates would leak the future into the test. So this measures the momentum + wholesale-lead core of the model, which drives the tomorrow / this-week / verdict numbers on the site.', '',
+    'Walk forward one weekly report at a time, giving the model only what existed on that date: retail reports up to the report date and the grade\'s NY Harbor wholesale spot price (RBOB for gasoline grades, ULSD for diesel) dated on or before it — the same 90-day window the site uses. The EIA outlook anchor is **disabled**: only the current forecast vintage is available, and using it for past dates would leak the future into the test. So this measures the momentum + wholesale-lead core of the model, which drives the tomorrow / this-week / verdict numbers on the site. All grades use the same constants.', '',
     '- **Forecast MAE** — mean absolute error of the 1- and 2-week-ahead prediction against the actual next reports, next to a "no change" baseline.',
     '- **Band coverage** — share of actual prices that fell inside the uncertainty band (a ±1σ band should catch ≈68%).',
     '- **Direction** — when the model predicts a 14-day move of at least the verdict threshold, how often the actual 2-week change had the same sign.',
     '- **Decision** — a driver who must buy within the week follows the verdict: buy now, or buy next week on "wait". Compared with always-now, always-wait, and a perfect-foresight oracle (min of the two). Savings are in cents per gallon, averaged over every week.', '',
-    '## Results', '',
-    '| Variant | 1wk MAE / no-change | 2wk MAE / no-change | Band 1wk / 2wk | Direction right | Saved vs always-now | Of oracle |',
-    '|---|---|---|---|---|---|---|',
-    row('Default (momentum + wholesale)', m),
-    row('Momentum only', m0), '',
-    `Default verdict mix: fill up now ${pct(m.verdicts.now)}, no rush ${pct(m.verdicts.ok)}, wait ${pct(m.verdicts.wait)}. `
-    + `"Wait" calls were right ${pct(m.waitRight)} of the time and saved ${c(m.waitSaved)}¢/gal on average when made. `
-    + `Always waiting a week would have cost ${c(m.wait - m.now)}¢/gal relative to always buying now; the oracle saves ${c(m.oracleGain)}¢/gal.`, '',
-    '## Per area', '',
-    '| Area | Saved vs always-now | Direction right | 1wk MAE / no-change |', '|---|---|---|---|');
-  for (const a of areas) lines.push(`| ${a.name} | ${c(a.savedVsNow)}¢ | ${pct(a.dirHit)} | ${c(a.mae7)}¢ / ${c(a.naive7)}¢ |`);
-  if (sweep.length) {
-    lines.push('', '## Constant sweep (one at a time, others at default)', '',
-      '| Constant | Value | Saved vs always-now | Of oracle | Direction right | MAE 1wk / 2wk | Band 1wk / 2wk | Wait share |', '|---|---|---|---|---|---|---|---|');
-    for (const s of sweep) {
-      const isDefault = s.value === DEFAULTS[s.key];
-      lines.push(`| \`${s.key}\` | ${s.value}${isDefault ? ' (default)' : ''} | ${c(s.savedVsNow)}¢ | ${pct(s.captured)} | ${pct(s.dirHit)} | ${c(s.mae7)}¢ / ${c(s.mae14)}¢ | ${pct(s.in7)} / ${pct(s.in14)} | ${pct(s.waitShare)} |`);
+    '## Summary by grade', '',
+    '| Grade | Decisions · areas | 1wk MAE / no-change | 2wk MAE / no-change | Band 1wk / 2wk | Direction right | Saved vs always-now | Of oracle |',
+    '|---|---|---|---|---|---|---|---|');
+  for (const [g, r] of Object.entries(results)) {
+    const m = r.base;
+    lines.push(`| ${GRADES[g].name} | ${m.n.toLocaleString()} · ${m.areas} | ${c(m.mae7)}¢ / ${c(m.naive7)}¢ | ${c(m.mae14)}¢ / ${c(m.naive14)}¢ | ${pct(m.in7)} / ${pct(m.in14)} | ${pct(m.dirHit)} | ${c(m.savedVsNow)}¢ | ${pct(m.captured)} |`);
+  }
+  for (const [g, r] of Object.entries(results)) {
+    const { base: m, noWholesale: m0, perArea, sweep } = r;
+    lines.push('', `## ${GRADES[g].name}`, '',
+      `${m.n.toLocaleString()} weekly decisions across ${m.areas} areas, ${m.from} → ${m.to}. Wholesale lead: ${GRADES[g].lead.toUpperCase()}.`, '',
+      '| Variant | 1wk MAE / no-change | 2wk MAE / no-change | Band 1wk / 2wk | Direction right | Saved vs always-now | Of oracle |',
+      '|---|---|---|---|---|---|---|',
+      row('Default (momentum + wholesale)', m),
+      row('Momentum only', m0), '',
+      `Verdict mix: fill up now ${pct(m.verdicts.now)}, no rush ${pct(m.verdicts.ok)}, wait ${pct(m.verdicts.wait)}. `
+      + `"Wait" calls were right ${pct(m.waitRight)} of the time and saved ${c(m.waitSaved)}¢/gal on average when made. `
+      + `Always waiting a week would have cost ${c(m.wait - m.now)}¢/gal relative to always buying now; the oracle saves ${c(m.oracleGain)}¢/gal.`, '',
+      '<details><summary>Per area</summary>', '',
+      '| Area | Saved vs always-now | Direction right | 1wk MAE / no-change |', '|---|---|---|---|');
+    for (const a of perArea) lines.push(`| ${a.name} | ${c(a.savedVsNow)}¢ | ${pct(a.dirHit)} | ${c(a.mae7)}¢ / ${c(a.naive7)}¢ |`);
+    lines.push('', '</details>');
+    if (sweep.length) {
+      lines.push('', '<details><summary>Constant sweep (one at a time, others at default)</summary>', '',
+        '| Constant | Value | Saved vs always-now | Of oracle | Direction right | MAE 1wk / 2wk | Band 1wk / 2wk | Wait share |', '|---|---|---|---|---|---|---|---|');
+      for (const s of sweep) {
+        const isDefault = s.value === DEFAULTS[s.key];
+        lines.push(`| \`${s.key}\` | ${s.value}${isDefault ? ' (default)' : ''} | ${c(s.savedVsNow)}¢ | ${pct(s.captured)} | ${pct(s.dirHit)} | ${c(s.mae7)}¢ / ${c(s.mae14)}¢ | ${pct(s.in7)} / ${pct(s.in14)} | ${pct(s.waitShare)} |`);
+      }
+      lines.push('', '</details>');
     }
   }
   lines.push('', '## Caveats', '',
     '- No outlook anchor in the test (see Method), so the 2-week numbers on the live site blend in one more signal than is measured here.',
     '- Weekly area averages, not station prices. A driver who shops around can beat any of these numbers.',
+    '- Diesel is reported for the U.S., the regions and California only (11 areas), so its sample is smaller and more regional.',
     '- The decision metric assumes the tank can wait a week. If it cannot, only the "now" and "no rush" verdicts apply.',
     '- Past behaviour of gas prices does not guarantee future behaviour. This is a calibration aid, not a promise.', '');
   return lines.join('\n');
