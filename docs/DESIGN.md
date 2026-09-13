@@ -2,7 +2,7 @@
 
 **Status:** Live at <https://jonathan-talvacchio.github.io/fuelcast/>
 **Repo:** <https://github.com/Jonathan-Talvacchio/fuelcast>
-**Last updated:** 2026-09-13 (backtest and fuel grades added)
+**Last updated:** 2026-09-13 (backtest per grade, fuel grades added)
 
 ## 1. Overview
 
@@ -212,24 +212,31 @@ All constants live in one `MODEL` object so they can be tuned in one place.
 
 ### 7.1 Backtest evidence
 
-`scripts/backtest.mjs` walks forward through 10 years of EIA history (15,080 weekly
-decisions across all 29 areas) using only the data that existed on each date; the
-outlook anchor is disabled because past forecast vintages are unavailable. The
-**Backtest model** workflow reruns it with the real API key and commits
-[`docs/BACKTEST.md`](BACKTEST.md). Headline results with the current constants:
+`scripts/backtest.mjs` walks forward through 10 years of EIA history, separately
+for each fuel grade with that grade's wholesale lead, using only the data that
+existed on each date; the outlook anchor is disabled because past forecast
+vintages are unavailable. The **Backtest model** workflow reruns it with the real
+API key and commits [`docs/BACKTEST.md`](BACKTEST.md). Results with the current
+(shared) constants:
 
-| Metric | Result |
-|---|---|
-| Direction of the predicted 2-week move | right 72% of the time (base rate 49%) |
-| 1-week forecast error | 5.0¢ vs 5.5¢ for "no change" |
-| Band coverage, 1 wk / 2 wk | 68% / 67% (target 68%) |
-| Following the verdict vs always buying now | saves 1.28¢/gal on average; 50% of what perfect foresight would save |
-| "Wait" calls | 40% of weeks, right 78% of the time, 3.2¢/gal saved each |
+| Grade | Decisions · areas | Direction right | 1-wk error vs "no change" | Band 1 wk / 2 wk | Saved vs always-now | Of oracle |
+|---|---|---|---|---|---|---|
+| Regular | 15,083 · 29 | 72% | 5.0¢ vs 5.5¢ | 68% / 67% | 1.28¢/gal | 50% |
+| Midgrade | 15,078 · 29 | 72% | 5.1¢ vs 5.5¢ | 67% / 67% | 1.15¢/gal | 46% |
+| Premium | 15,077 · 29 | 72% | 5.0¢ vs 5.4¢ | 67% / 67% | 1.16¢/gal | 47% |
+| Diesel | 5,722 · 11 | 75% | 4.1¢ vs 4.6¢ | 69% / 63% | 1.27¢/gal | 65% |
 
-The wholesale lead is the single most valuable input: momentum alone gets 64%
-direction accuracy and half the savings. The constant sweep found `passThrough`,
-`verdictMove`, `momentumPoints` and `leadLookbackDays` near their optimum; the
-two changes it motivated were momentum decay and linear band growth.
+Base rate for direction is ≈50%. "Wait" calls are right 76–81% of the time
+depending on grade and save about 3¢/gal each when made.
+
+The wholesale lead is the single most valuable input for every grade: momentum
+alone gets 64–70% direction accuracy and roughly half the savings. The sweep found
+`passThrough`, `verdictMove`, `momentumPoints` and `leadLookbackDays` near their
+optimum for the gasoline grades; the two changes it motivated were momentum decay
+and linear band growth. Diesel is the best-behaved grade (ULSD leads the pump most
+reliably). Its sweep shows a lower pass-through (0.35) would cut its forecast error
+further (3.7¢) at a small cost in savings, so the shared constants were kept —
+the site optimizes for the decision, not the point forecast.
 
 ## 8. User interface
 
