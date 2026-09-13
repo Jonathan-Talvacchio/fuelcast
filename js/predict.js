@@ -12,7 +12,7 @@ export const MODEL = {
   maxSlopePerDay: 0.02,     // $/gal/day cap on momentum
   momentumDecayDays: 7,     // momentum fades with this time constant (backtested: see docs/BACKTEST.md)
   bandScale: 1,             // multiplier on the uncertainty band
-  bandExponent: 0.5,        // band grows with (days / stepDays) ** exponent (0.5 = random walk)
+  bandExponent: 1,          // band grows with (days / stepDays) ** exponent (backtested: 1 calibrates both horizons)
   passThrough: 0.7,         // share of wholesale move that reaches the pump
   leadLookbackDays: 10,     // trading days of wholesale change to consider
   leadMaxEffect: 0.25,      // $/gal cap on wholesale effect
