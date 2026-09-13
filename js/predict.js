@@ -84,10 +84,10 @@ export function momentumSlope(points, n = MODEL.momentumPoints) {
 }
 
 // Total expected $/gal effect at the pump from the recent wholesale move.
-export function wholesaleLead(rbob) {
-  if (!rbob || rbob.length < 2) return 0;
-  const last = rbob[rbob.length - 1].price;
-  const prior = rbob[Math.max(0, rbob.length - 1 - MODEL.leadLookbackDays)].price;
+export function wholesaleLead(spot) {
+  if (!spot || spot.length < 2) return 0;
+  const last = spot[spot.length - 1].price;
+  const prior = spot[Math.max(0, spot.length - 1 - MODEL.leadLookbackDays)].price;
   return clamp((last - prior) * MODEL.passThrough, -MODEL.leadMaxEffect, MODEL.leadMaxEffect);
 }
 
@@ -159,7 +159,8 @@ export function verdictFor(score, change14 = 0) {
  * @param {{date:string,price:number}[]} p.series  area history, oldest → newest
  * @param {{month:string,price:number}[]} [p.outlook]  monthly forecast for the area's region
  * @param {{date:string,price:number}[]} [p.regionSeries]  region history (to offset the outlook)
- * @param {{wti?:{date:string,price:number}[], rbob?:{date:string,price:number}[]}} [p.wholesale]
+ * @param {{spot?:{date:string,price:number}[], rbob?:{date:string,price:number}[], wti?:{date:string,price:number}[]}} [p.wholesale]
+ *        `spot` is the wholesale series that leads this fuel's pump price (RBOB for gasoline, ULSD for diesel); `rbob` is accepted as a fallback
  * @param {number} [p.now]  ms timestamp for "today" (defaults to Date.now())
  */
 export function analyze({ series, outlook, regionSeries, wholesale, now = Date.now() }) {
@@ -171,7 +172,8 @@ export function analyze({ series, outlook, regionSeries, wholesale, now = Date.n
   const d0 = clamp(Math.round((todayMs - asOfMs) / DAY_MS), 0, 60);
 
   const slope = momentumSlope(pts);
-  const lead = wholesaleLead(wholesale && wholesale.rbob);
+  const spot = wholesale && (wholesale.spot || wholesale.rbob);
+  const lead = wholesaleLead(spot);
   const { sd, stepDays } = volatility(pts);
 
   // Offset the region-level outlook by how this area currently trades vs. its
@@ -252,7 +254,7 @@ export function analyze({ series, outlook, regionSeries, wholesale, now = Date.n
       momentumPerWeek: slope * 7,
       wholesaleEffect: lead,
       wti: change(wholesale && wholesale.wti, MODEL.leadLookbackDays),
-      rbob: change(wholesale && wholesale.rbob, MODEL.leadLookbackDays),
+      spot: change(spot, MODEL.leadLookbackDays),
       outlook: upcoming,
       outlookOffset: offset,
     },

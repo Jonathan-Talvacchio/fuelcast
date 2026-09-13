@@ -155,3 +155,22 @@ test('every state maps to a known area', () => {
   }
   assert.equal(Object.keys(STATES).length, 51);
 });
+
+test('every grade names a wholesale lead and an outlook family', async () => {
+  const { GRADES } = await import('../js/regions.js');
+  for (const [k, g] of Object.entries(GRADES)) {
+    assert.ok(['rbob', 'ulsd'].includes(g.lead), `${k} lead`);
+    assert.ok(['regular', 'diesel'].includes(g.outlook), `${k} outlook`);
+    assert.match(g.product, /^EP/);
+  }
+});
+
+test('analyze accepts wholesale.spot and falls back to wholesale.rbob', () => {
+  const series = weekly(20, () => 3.0);
+  const up = daily(15, i => 2 + i * 0.02);
+  const a = analyze({ series, wholesale: { spot: up }, now });
+  const b = analyze({ series, wholesale: { rbob: up }, now });
+  assert.equal(a.drivers.wholesaleEffect, b.drivers.wholesaleEffect);
+  assert.ok(a.drivers.wholesaleEffect > 0);
+  assert.ok(a.drivers.spot && a.drivers.spot.delta > 0);
+});

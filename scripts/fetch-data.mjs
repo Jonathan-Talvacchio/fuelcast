@@ -30,21 +30,27 @@ await writeFile(output, JSON.stringify(data));
 
 const areaCount = Object.keys(data.areas).length;
 const latest = Object.values(data.areas).map(a => a.weekly.at(-1)?.date).sort().at(-1);
-console.log(`Wrote ${output}: ${areaCount} areas, latest retail ${latest}, `
-  + `${Object.keys(data.outlook).length} outlook series, `
-  + `wholesale through ${data.wholesale.rbob.at(-1)?.date}`);
+const coverage = Object.keys(data.grades).map(g =>
+  `${g} ${Object.values(data.areas).filter(a => a.prices[g]).length}/${areaCount}`).join(', ');
+console.log(`Wrote ${output}: ${areaCount} areas, latest retail ${latest}; grade coverage: ${coverage}; `
+  + `outlook: ${Object.entries(data.outlook).map(([f, m]) => `${f} ${Object.keys(m).join('/')}`).join('; ')}; `
+  + `wholesale: ${Object.entries(data.wholesale).map(([k, v]) => `${k} ${v.length}d`).join(', ')}`);
 
 function validate(d) {
   const fail = msg => { throw new Error(`Invalid data: ${msg}`); };
   if (!d.generatedAt || !d.source?.id) fail('missing generatedAt/source');
+  if (!d.grades?.regular) fail('missing grades.regular');
   if (!d.areas || typeof d.areas !== 'object') fail('missing areas');
-  for (const [id, a] of Object.entries(d.areas)) {
-    const series = a.daily?.length ? a.daily : a.weekly;
-    if (!a.name || !a.padd) fail(`${id}: missing name/padd`);
-    if (!Array.isArray(series) || series.length < 8) fail(`${id}: too little history (${series?.length ?? 0})`);
+  const checkSeries = (label, series) => {
+    if (!Array.isArray(series) || series.length < 8) fail(`${label}: too little history (${series?.length ?? 0})`);
     for (const p of series) {
-      if (!/^\d{4}-\d{2}-\d{2}$/.test(p.date) || !Number.isFinite(p.price) || p.price <= 0) fail(`${id}: bad point ${JSON.stringify(p)}`);
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(p.date) || !Number.isFinite(p.price) || p.price <= 0) fail(`${label}: bad point ${JSON.stringify(p)}`);
     }
+  };
+  for (const [id, a] of Object.entries(d.areas)) {
+    if (!a.name || !a.padd) fail(`${id}: missing name/padd`);
+    if (!a.prices?.regular) fail(`${id}: missing regular prices`);
+    for (const [g, p] of Object.entries(a.prices)) checkSeries(`${id}/${g}`, p.daily?.length ? p.daily : p.weekly);
   }
   if (!d.outlook || typeof d.outlook !== 'object') fail('missing outlook');
   if (!d.wholesale?.rbob?.length) fail('missing wholesale.rbob');

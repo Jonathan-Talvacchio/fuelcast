@@ -101,6 +101,15 @@ select { width: 100%; }
 .btn { cursor: pointer; white-space: nowrap; }
 .btn:hover { border-color: var(--accent); }
 .btn:disabled { opacity: .6; cursor: progress; }
+.control-grade { flex: 0 1 auto; }
+.segmented { display: inline-flex; background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px; padding: 3px; gap: 2px; min-height: 44px; }
+.segmented button {
+  font: inherit; font-weight: 600; font-size: .9rem; border: 0; background: transparent; color: var(--text-2);
+  padding: .4rem .8rem; border-radius: 8px; cursor: pointer; min-width: 44px;
+}
+.segmented button[aria-checked="true"] { background: var(--surface); color: var(--text); box-shadow: 0 1px 2px rgba(0,0,0,.12); }
+.segmented button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.segmented button:disabled { opacity: .45; cursor: not-allowed; }
 .note { flex-basis: 100%; margin: 0; font-size: .9rem; color: var(--text-2); }
 
 /* Status */
@@ -201,6 +210,9 @@ th { color: var(--muted); font-weight: 600; font-size: .8rem; }
 .skeleton .tile-value, .skeleton .ring-num { opacity: .3; }
 
 @media (max-width: 760px) {
+  .control-grade { flex-basis: 100%; }
+  .segmented { display: flex; }
+  .segmented button { flex: 1; padding-inline: .3rem; }
   .verdict { grid-template-columns: 1fr; }
   .score { flex-direction: row; gap: .75rem; justify-content: flex-start; }
   .score .ring { width: 88px; height: 88px; }

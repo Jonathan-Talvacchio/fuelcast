@@ -19,26 +19,38 @@ that resolves to:
 {
   "generatedAt": "2026-09-13T21:00:00Z",
   "source": { "id": "eia", "name": "...", "url": "...", "cadence": "weekly", "note": "..." },
+  "grades": {                     // which fuels this file carries; keys match js/regions.js (GRADES)
+    "regular": { "name": "Regular", "lead": "rbob", "outlook": "regular" },
+    "diesel":  { "name": "Diesel",  "lead": "ulsd", "outlook": "diesel" }
+  },
   "areas": {
     "STX": {                      // area ids must match js/regions.js (AREAS)
       "name": "Texas",
       "kind": "state",            // national | metro | state | region
-      "padd": "R30",              // region used for the outlook
-      "weekly": [ { "date": "2026-09-07", "price": 3.618 } ],   // oldest → newest
-      "daily":  [ { "date": "2026-09-12", "price": 3.62 } ]     // optional; preferred by the UI when present
+      "padd": "R30",              // region used for the outlook and as the fallback area
+      "prices": {
+        "regular": { "weekly": [ { "date": "2026-09-07", "price": 3.618 } ],   // oldest → newest
+                     "daily":  [ { "date": "2026-09-12", "price": 3.62 } ] },  // optional; preferred when present
+        "premium": { "weekly": [ ... ] }
+        // a grade missing here makes the UI fall back to the area's padd, then NUS
+      },
+      "weekly": [ ... ]           // alias of prices.regular.weekly, kept for older consumers
     }
   },
-  "outlook": {                    // monthly forecast, $/gal, keyed by padd id (may be empty {})
-    "R30": [ { "month": "2026-10", "price": 3.59 } ]
+  "outlook": {                    // monthly forecast, $/gal, by outlook family then padd id
+    "regular": { "R30": [ { "month": "2026-10", "price": 3.59 } ] },
+    "diesel":  { "NUS": [ { "month": "2026-10", "price": 3.95 } ] }
   },
   "wholesale": {                  // daily spot prices, oldest → newest
     "wti":  [ { "date": "2026-09-09", "price": 97.26 } ],       // $/bbl (optional)
-    "rbob": [ { "date": "2026-09-09", "price": 3.289 } ]        // $/gal, required
+    "rbob": [ { "date": "2026-09-09", "price": 3.289 } ],       // $/gal, required (leads gasoline)
+    "ulsd": [ { "date": "2026-09-09", "price": 3.221 } ]        // $/gal, optional (leads diesel)
   }
 }
 ```
 
-Prices are dollars per gallon. Every area needs at least 8 points of history.
+Prices are dollars per gallon. Every area needs `prices.regular` with at least 8
+points; other grades are optional per area.
 
 ## Adding a paid / daily provider later
 

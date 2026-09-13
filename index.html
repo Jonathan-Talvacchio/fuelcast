@@ -29,6 +29,10 @@
       <button id="locateBtn" class="btn" type="button">
         <span aria-hidden="true">📍</span> Use my location
       </button>
+      <div class="control control-grade">
+        <span class="control-label" id="gradeLabel">Fuel</span>
+        <div class="segmented" id="gradeSelect" role="radiogroup" aria-labelledby="gradeLabel"></div>
+      </div>
       <p id="areaNote" class="note" hidden></p>
     </section>
 
@@ -60,7 +64,7 @@
         <div class="tile">
           <span class="tile-label">Today <small>(est.)</small></span>
           <span class="tile-value" id="pToday">—</span>
-          <span class="tile-delta" id="dToday">per gallon, regular</span>
+          <span class="tile-delta" id="dToday">per gallon</span>
         </div>
         <div class="tile">
           <span class="tile-label">Tomorrow <small>(predicted)</small></span>
@@ -102,7 +106,7 @@
           <ul class="drivers" id="drivers"></ul>
         </section>
         <section class="card">
-          <h2>Last 90 days in <span id="areaName2">your area</span></h2>
+          <h2>Last 90 days in <span id="areaName2">your area</span> <span class="muted" id="gradeName2"></span></h2>
           <dl class="range">
             <div><dt>Low</dt><dd id="rLow">—</dd></div>
             <div><dt>Average</dt><dd id="rAvg">—</dd></div>
@@ -118,7 +122,7 @@
 
       <section class="card how">
         <h2>How this works</h2>
-        <p>Every day we pull the latest <strong>weekly average retail price for regular gasoline</strong> from the U.S. Energy Information Administration (EIA) for your metro, state, or region, along with EIA's daily wholesale gasoline and crude oil prices and its official monthly price outlook.</p>
+        <p>Every day we pull the latest <strong>weekly average retail prices</strong> — regular, midgrade and premium gasoline, and diesel — from the U.S. Energy Information Administration (EIA) for your metro, state, or region, along with EIA's daily wholesale gasoline and diesel prices, crude oil, and its official monthly price outlook.</p>
         <p>The prediction is a simple, transparent estimate: recent momentum in your area's price, the direction wholesale gasoline has moved over the last couple of weeks (pump prices usually follow with a short lag), and — further out — EIA's monthly forecast for your region. The <strong>deal score</strong> asks two questions: how does today's price compare with the last 90 days in your area, and are prices expected to rise or fall over the next two weeks? A high score means "cheap now and likely to get pricier," so fill up.</p>
         <p class="tip"><strong>Tip:</strong> station prices often creep up ahead of the weekend; early-week fill-ups tend to be a little cheaper. Shop around too — the spread between the cheapest and priciest station in town is usually bigger than any day-to-day move.</p>
       </section>
@@ -128,7 +132,7 @@
   <footer class="site-footer">
     <div class="wrap">
       <p class="disclaimer"><strong>Disclaimer:</strong> Fuelcast exists only to help you decide when to buy gas. All prices shown are area-wide averages, and all predictions are estimates based on public data and simple statistical rules. They are <strong>not guaranteed</strong>, can be wrong, and are not financial advice. Actual prices at any station will differ. Use your own judgment.</p>
-      <p class="muted">Data: <a id="sourceLink" href="https://www.eia.gov/petroleum/gasdiesel/" rel="noopener">U.S. Energy Information Administration</a>. Retail prices are weekly averages of regular gasoline. Data updated <span id="updatedAt">—</span>. Your area choice is saved in your browser only.</p>
+      <p class="muted">Data: <a id="sourceLink" href="https://www.eia.gov/petroleum/gasdiesel/" rel="noopener">U.S. Energy Information Administration</a>. Retail prices are weekly area averages by grade. Data updated <span id="updatedAt">—</span>. Your area choice is saved in your browser only.</p>
     </div>
   </footer>
 

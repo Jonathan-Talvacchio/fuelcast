@@ -4,10 +4,11 @@
 for your area, tomorrow's and this week's predicted prices, a deal score, and where
 prices are headed — using free public data, hosted for free on GitHub Pages.
 
-- **Data:** U.S. Energy Information Administration (EIA) — weekly retail regular
-  gasoline prices for the U.S., 5 regions (+3 East Coast sub-regions), 9 states and
-  10 metros; EIA's official monthly price outlook; daily wholesale gasoline (RBOB) and
-  crude (WTI) spot prices.
+- **Data:** U.S. Energy Information Administration (EIA) — weekly retail prices for
+  regular, midgrade and premium gasoline and diesel across the U.S., 5 regions (+3
+  East Coast sub-regions), 9 states and 10 metros (diesel: regions and California);
+  EIA's official monthly price outlook; daily wholesale gasoline (RBOB), diesel (ULSD)
+  and crude (WTI) spot prices.
 - **Predictions:** a transparent heuristic (recent momentum + wholesale pass-through +
   EIA outlook trajectory) with an uncertainty band. See "How this works" on the page
   and `js/predict.js`.

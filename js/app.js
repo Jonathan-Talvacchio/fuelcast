@@ -1,9 +1,10 @@
-import { AREAS, STATES, KIND_LABELS, areaForCoords } from './regions.js';
+import { AREAS, STATES, GRADES, KIND_LABELS, areaForCoords } from './regions.js';
 import { analyze, parseDate } from './predict.js';
 import { renderChart, fillTable } from './chart.js';
 
 const DATA_URL = 'data/prices.json';
 const STORAGE_KEY = 'fuelcast.selection';
+const GRADE_KEY = 'fuelcast.grade';
 const STALE_DAYS = 10;
 const DAY_MS = 86400000;
 
@@ -14,6 +15,7 @@ const fmtDate = s => new Date(parseDate(s)).toLocaleDateString(undefined, { mont
 const fmtMonth = s => new Date(parseDate(s)).toLocaleDateString(undefined, { month: 'long', year: 'numeric', timeZone: 'UTC' });
 
 let data = null;
+let grade = 'regular';
 
 // ---- Selection: "area:ID" or "state:CODE" ----------------------------------
 
@@ -54,9 +56,15 @@ function resolveSelection(value) {
   return null;
 }
 
+// URL hash: "#state:TX" or "#state:TX/diesel".
+function parseHash() {
+  const [sel, g] = decodeURIComponent(location.hash.slice(1)).split('/');
+  return { sel: resolveSelection(sel) ? sel : null, grade: GRADES[g] ? g : null };
+}
+
 function initialSelection() {
-  const fromHash = decodeURIComponent(location.hash.slice(1));
-  if (resolveSelection(fromHash)) return fromHash;
+  const h = parseHash();
+  if (h.sel) return h.sel;
   try {
     const stored = localStorage.getItem(STORAGE_KEY);
     if (resolveSelection(stored)) return stored;
@@ -64,9 +72,64 @@ function initialSelection() {
   return 'area:NUS';
 }
 
+function initialGrade() {
+  const h = parseHash();
+  if (h.grade) return h.grade;
+  try {
+    const stored = localStorage.getItem(GRADE_KEY);
+    if (GRADES[stored]) return stored;
+  } catch { /* storage unavailable */ }
+  return 'regular';
+}
+
 function persist(value) {
-  try { localStorage.setItem(STORAGE_KEY, value); } catch { /* ignore */ }
-  history.replaceState(null, '', `#${encodeURIComponent(value)}`);
+  try { localStorage.setItem(STORAGE_KEY, value); localStorage.setItem(GRADE_KEY, grade); } catch { /* ignore */ }
+  history.replaceState(null, '', `#${encodeURIComponent(value)}${grade === 'regular' ? '' : '/' + grade}`);
+}
+
+function buildGradeSelect() {
+  const box = $('gradeSelect');
+  box.replaceChildren(...Object.entries(GRADES).map(([key, g]) => {
+    const b = document.createElement('button');
+    b.type = 'button'; b.setAttribute('role', 'radio'); b.dataset.grade = key; b.textContent = g.short;
+    b.addEventListener('click', () => {
+      if (grade === key) return;
+      grade = key;
+      syncGradeSelect();
+      persist($('areaSelect').value);
+      setStatus('');
+      render($('areaSelect').value);
+    });
+    return b;
+  }));
+  syncGradeSelect();
+}
+
+function syncGradeSelect() {
+  for (const b of $('gradeSelect').querySelectorAll('button')) {
+    b.setAttribute('aria-checked', String(b.dataset.grade === grade));
+    // Grey out grades nobody reports (e.g. a provider without diesel).
+    b.disabled = !!data && !Object.values(data.areas).some(a => a.prices[b.dataset.grade]);
+  }
+}
+
+function pickSeries(area, g) {
+  const p = area && area.prices && area.prices[g];
+  if (!p) return null;
+  const s = p.daily && p.daily.length ? p.daily : p.weekly;
+  return s && s.length ? s : null;
+}
+
+// Find this grade's series for an area, falling back to its region (then the
+// U.S.) when the grade isn't reported there — EIA publishes diesel for regions
+// and California only.
+function seriesFor(areaId, g) {
+  const area = data.areas[areaId];
+  let s = pickSeries(area, g);
+  if (s) return { series: s, areaId, fallback: false };
+  s = pickSeries(data.areas[area.padd], g);
+  if (s) return { series: s, areaId: area.padd, fallback: true };
+  return { series: pickSeries(data.areas.NUS, g), areaId: 'NUS', fallback: true };
 }
 
 // ---- Rendering --------------------------------------------------------------
@@ -105,7 +168,7 @@ function scoreSub(r) {
   return 'Pricey vs. last 90 days';
 }
 
-function renderDrivers(r) {
+function renderDrivers(r, g) {
   const items = [];
   const chip = (d, fmt) => `<span class="chip ${d > 0 ? 'up' : d < 0 ? 'down' : ''}">${d > 0 ? '▲' : d < 0 ? '▼' : '•'} ${fmt}</span>`;
 
@@ -115,11 +178,12 @@ function renderDrivers(r) {
     d: 'Direction of your area\'s reported average over the last six weeks, weighted toward recent weeks.',
   });
 
-  if (r.drivers.rbob) {
-    const w = r.drivers.rbob;
+  if (r.drivers.spot) {
+    const w = r.drivers.spot;
     const eff = r.drivers.wholesaleEffect;
+    const what = g.lead === 'ulsd' ? 'Wholesale diesel (ULSD)' : 'Wholesale gasoline';
     items.push({
-      ico: '🛢️', t: `Wholesale gasoline ${chip(w.delta, `${(w.pct * 100).toFixed(1)}%`)} <span class="muted">${money(w.to)}/gal (${fmtDate(w.asOf)})</span>`,
+      ico: '🛢️', t: `${what} ${chip(w.delta, `${(w.pct * 100).toFixed(1)}%`)} <span class="muted">${money(w.to)}/gal (${fmtDate(w.asOf)})</span>`,
       d: `NY Harbor spot price over the last ~2 weeks. Pump prices usually follow within 1–2 weeks: ${Math.abs(eff) < 0.005 ? 'little effect expected' : `roughly ${eff > 0 ? '+' : '−'}${cents(eff)} at the pump`}.`,
     });
   }
@@ -127,7 +191,7 @@ function renderDrivers(r) {
     const w = r.drivers.wti;
     items.push({
       ico: '🌍', t: `Crude oil (WTI) ${chip(w.delta, `${(w.pct * 100).toFixed(1)}%`)} <span class="muted">$${w.to.toFixed(2)}/bbl (${fmtDate(w.asOf)})</span>`,
-      d: 'Crude is the biggest ingredient in gasoline prices; big moves here show up at the pump over the following weeks.',
+      d: `Crude is the biggest ingredient in ${g.lead === 'ulsd' ? 'diesel' : 'gasoline'} prices; big moves here show up at the pump over the following weeks.`,
     });
   }
   $('drivers').innerHTML = items.map(i =>
@@ -138,7 +202,7 @@ function renderDrivers(r) {
     ol.innerHTML = r.drivers.outlook.map(o =>
       `<li><span class="m">${fmtMonth(o.month + '-01')}</span><strong>${money(o.price)}</strong></li>`).join('');
   } else {
-    ol.innerHTML = '<li class="muted">No official outlook available for this area.</li>';
+    ol.innerHTML = '<li class="muted">No official outlook available for this fuel and area.</li>';
   }
 }
 
@@ -146,27 +210,41 @@ function render(selectionValue) {
   const sel = resolveSelection(selectionValue) || resolveSelection('area:NUS');
   const area = data.areas[sel.areaId];
   if (!area) { setStatus(`No price data for ${sel.label} yet.`, 'error'); return; }
+  const g = GRADES[grade];
 
-  const series = area.daily && area.daily.length ? area.daily : area.weekly;
-  const paddId = area.padd;
-  const regionArea = paddId !== sel.areaId ? data.areas[paddId] : null;
+  const found = seriesFor(sel.areaId, grade);
+  if (!found.series) { setStatus(`No ${g.name.toLowerCase()} price data is available yet.`, 'error'); return; }
+  const shownArea = data.areas[found.areaId];
+  const paddId = shownArea.padd;
+  const regionSeries = paddId !== found.areaId ? pickSeries(data.areas[paddId], grade) : null;
+  const outlookFamily = data.outlook[g.outlook] || {};
+  const outlook = outlookFamily[paddId] || outlookFamily.NUS || null;
   const r = analyze({
-    series,
-    outlook: data.outlook[paddId],
-    regionSeries: regionArea ? (regionArea.daily?.length ? regionArea.daily : regionArea.weekly) : null,
-    wholesale: data.wholesale,
+    series: found.series,
+    outlook,
+    regionSeries,
+    wholesale: { spot: data.wholesale[g.lead], wti: data.wholesale.wti },
   });
 
-  $('areaNote').textContent = sel.note;
-  $('areaNote').hidden = !sel.note;
-  $('areaName').textContent = sel.label;
-  $('areaName2').textContent = sel.label === 'U.S. average' ? 'the U.S.' : sel.label;
+  let label = sel.label;
+  let note = sel.note;
+  if (found.fallback) {
+    const base = sel.label.replace(/ \(.*\)$/, '');
+    const what = shownArea.kind === 'national' ? 'U.S. average' : `${shownArea.name} region`;
+    label = `${base} (${what})`;
+    note = `${g.name} prices aren't reported for ${base}, so we're showing the ${what} — the closest available data.`;
+  }
+  $('areaNote').textContent = note;
+  $('areaNote').hidden = !note;
+  $('areaName').textContent = label;
+  $('areaName2').textContent = label === 'U.S. average' ? 'the U.S.' : label;
+  $('gradeName2').textContent = `· ${g.name.toLowerCase()}`;
 
   const card = $('verdictCard');
   card.dataset.verdict = r.verdict.key;
   $('verdictLabel').textContent = r.verdict.label;
   $('verdictWhy').textContent = r.verdict.why;
-  $('reason').textContent = reasonText(r, sel.label);
+  $('reason').textContent = reasonText(r, label);
   $('lastReported').textContent = `$${r.lastReported.toFixed(3)}`;
   $('asOfDate').textContent = fmtDate(r.asOf);
   $('stale').innerHTML = r.daysSinceReport > 14
@@ -179,7 +257,7 @@ function render(selectionValue) {
 
   $('pToday').textContent = money(r.today);
   $('dToday').textContent = r.daysSinceReport > 0
-    ? `est. from ${fmtDate(r.asOf)} report` : 'per gallon, regular';
+    ? `est. from ${fmtDate(r.asOf)} report` : `per gallon, ${g.name.toLowerCase()}`;
   $('pTomorrow').textContent = money(r.tomorrow);
   delta($('dTomorrow'), r.tomorrow, r.today, 'vs today');
   $('pThisWeek').textContent = money(r.thisWeek);
@@ -195,12 +273,12 @@ function render(selectionValue) {
   $('rMarker').style.left = `${(pos * 100).toFixed(1)}%`;
   $('rNote').textContent = `Today's estimate is ${cents(r.today - r.range.low)} above the 90-day low and ${cents(r.range.high - r.today)} below the high.`;
 
-  renderDrivers(r);
+  renderDrivers(r, g);
   renderChart($('chart'), r);
   fillTable($('dataTable').querySelector('tbody'), r);
 
   $('content').hidden = false;
-  document.title = `${r.verdict.label} · ${sel.label} · Fuelcast`;
+  document.title = `${r.verdict.label} · ${label}${grade === 'regular' ? '' : ' · ' + g.name} · Fuelcast`;
 }
 
 // ---- Geolocation ------------------------------------------------------------
@@ -235,13 +313,21 @@ function locate() {
 
 async function main() {
   buildSelect();
+  grade = initialGrade();
+  buildGradeSelect();
   const sel = $('areaSelect');
   sel.value = initialSelection();
   sel.addEventListener('change', () => { persist(sel.value); setStatus(''); render(sel.value); });
   $('locateBtn').addEventListener('click', locate);
   window.addEventListener('hashchange', () => {
-    const v = decodeURIComponent(location.hash.slice(1));
-    if (resolveSelection(v) && v !== sel.value) { sel.value = v; render(v); }
+    const h = parseHash();
+    const g = h.grade || 'regular';
+    if ((h.sel && h.sel !== sel.value) || g !== grade) {
+      if (h.sel) sel.value = h.sel;
+      grade = g;
+      syncGradeSelect();
+      render(sel.value);
+    }
   });
 
   setStatus('Loading the latest prices…', 'info');
@@ -253,6 +339,13 @@ async function main() {
     setStatus(`Could not load price data (${e.message}). Please try again later.`, 'error');
     return;
   }
+
+  // Older data files (before grades) carry only regular prices at the top level.
+  for (const a of Object.values(data.areas)) a.prices ||= { regular: { weekly: a.weekly, daily: a.daily } };
+  data.grades ||= { regular: GRADES.regular };
+  if (!data.outlook.regular && !data.outlook.diesel) data.outlook = { regular: data.outlook };
+  if (!Object.values(data.areas).some(a => a.prices[grade])) grade = 'regular';
+  syncGradeSelect();
 
   const generated = new Date(data.generatedAt);
   $('updatedAt').textContent = generated.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });

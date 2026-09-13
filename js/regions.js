@@ -41,6 +41,15 @@ export const AREAS = {
   R5XCA: { name: 'West Coast (excl. California)', kind: 'region', padd: 'R50' },
 };
 
+// Fuel grades. `lead` names the wholesale series that leads pump prices;
+// `outlook` names which EIA forecast family applies.
+export const GRADES = {
+  regular:  { name: 'Regular',  short: 'Regular',  product: 'EPMR',  lead: 'rbob', outlook: 'regular' },
+  midgrade: { name: 'Midgrade', short: 'Midgrade', product: 'EPMM',  lead: 'rbob', outlook: 'regular' },
+  premium:  { name: 'Premium',  short: 'Premium',  product: 'EPMP',  lead: 'rbob', outlook: 'regular' },
+  diesel:   { name: 'Diesel',   short: 'Diesel',   product: 'EPD2D', lead: 'ulsd', outlook: 'diesel' },
+};
+
 export const KIND_LABELS = {
   metro: 'Metro areas',
   state: 'States',
