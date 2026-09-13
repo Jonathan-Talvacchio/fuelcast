@@ -2,7 +2,7 @@
 
 **Status:** Live at <https://jonathan-talvacchio.github.io/fuelcast/>
 **Repo:** <https://github.com/Jonathan-Talvacchio/fuelcast>
-**Last updated:** 2026-09-13 (backtest added)
+**Last updated:** 2026-09-13 (backtest and fuel grades added)
 
 ## 1. Overview
 
@@ -82,27 +82,38 @@ There are two moving parts and nothing else:
 
 | Data | Route | Series | Cadence | Use |
 |---|---|---|---|---|
-| Retail regular gasoline, $/gal | `petroleum/pri/gnd` | product `EPMR`, 29 `duoarea` codes | Weekly (Mondays) | Price history, "today", deal score |
-| Regular gasoline retail outlook, ¢/gal | `steo` | `MGRARUS`, `MGRARP1`–`MGRARP5` | Monthly, ~15 months ahead | Anchor for the 1–4 week projection; "official outlook" panel |
-| NY Harbor RBOB gasoline spot, $/gal | `petroleum/pri/spt` | `EER_EPMRU_PF4_Y35NY_DPG` | Daily | Leading indicator for pump prices |
+| Retail prices, $/gal | `petroleum/pri/gnd` | products `EPMR` regular, `EPMM` midgrade, `EPMP` premium (29 areas each), `EPD2D` diesel (11 areas: U.S., regions, California) | Weekly (Mondays) | Price history, "today", deal score |
+| Regular gasoline retail outlook, ¢/gal | `steo` | `MGRARUS`, `MGRARP1`–`MGRARP5` | Monthly, ~15 months ahead | Anchor for the 1–4 week projection (all gasoline grades); "official outlook" panel |
+| Diesel retail outlook, ¢/gal | `steo` | `DSRTUUS` (U.S. only) | Monthly | Anchor for diesel, offset to the area |
+| NY Harbor RBOB gasoline spot, $/gal | `petroleum/pri/spt` | `EER_EPMRU_PF4_Y35NY_DPG` | Daily | Leading indicator for gasoline pump prices |
+| NY Harbor ULSD diesel spot, $/gal | `petroleum/pri/spt` | `EER_EPD2DXL0_PF4_Y35NY_DPG` | Daily | Leading indicator for diesel pump prices |
 | WTI crude spot, $/bbl | `petroleum/pri/spt` | `RWTC` | Daily | Context in "what's driving prices" |
 
 ### 5.2 Normalized contract (`data/prices.json`)
 
 ```jsonc
 {
-  "generatedAt": "2026-09-13T22:14:05Z",
+  "generatedAt": "2026-09-13T23:20:54Z",
   "source": { "id": "eia", "name": "...", "url": "...", "cadence": "weekly", "note": "..." },
+  "grades": { "regular": { "name": "Regular", "lead": "rbob", "outlook": "regular" }, ...,
+              "diesel":  { "name": "Diesel",  "lead": "ulsd", "outlook": "diesel" } },
   "areas": {
     "STX": { "name": "Texas", "kind": "state", "padd": "R30",
-             "weekly": [ { "date": "2026-09-07", "price": 3.618 } ],   // oldest → newest, 104 weeks
-             "daily":  [ /* optional; preferred when present */ ] }
+             "prices": {
+               "regular": { "weekly": [ { "date": "2026-09-07", "price": 3.618 } ] },  // oldest → newest, 104 weeks
+               "premium": { "weekly": [ ... ] }            // a missing grade → UI falls back to padd, then NUS
+             },
+             "weekly": [ ... ] }                           // alias of prices.regular.weekly
   },
-  "outlook":   { "R30": [ { "month": "2026-10", "price": 3.589 } ] },  // keyed by PADD, $/gal
-  "wholesale": { "wti": [ { "date": "2026-09-09", "price": 97.26 } ],
-                 "rbob": [ { "date": "2026-09-09", "price": 3.289 } ] }
+  "outlook":   { "regular": { "R30": [ { "month": "2026-10", "price": 3.589 } ] },   // by family, then PADD
+                 "diesel":  { "NUS": [ ... ] } },
+  "wholesale": { "wti":  [ { "date": "2026-09-09", "price": 97.26 } ],
+                 "rbob": [ { "date": "2026-09-09", "price": 3.289 } ],
+                 "ulsd": [ { "date": "2026-09-09", "price": 4.85 } ] }
 }
 ```
+
+The file is about 500 KB with four grades (about 120 KB gzipped over Pages).
 
 Area ids are EIA `duoarea` codes so the data file and `js/regions.js` agree without
 a mapping layer. The fetch script rejects a file with fewer than 8 history points
@@ -133,6 +144,15 @@ The dropdown lists states first (what people know), then metros, regions and the
 U.S. average. Selecting a state without its own series shows a note explaining
 which regional average is being used. Selection is stored in `localStorage` and
 mirrored in the URL hash (`#state:TX`) so links are shareable.
+
+**Fuel grades.** A segmented control offers Regular · Midgrade · Premium · Diesel
+(`GRADES` in `regions.js`). Each grade names the wholesale series that leads it
+(RBOB for gasoline, ULSD for diesel) and the outlook family it follows (the
+regular-gasoline forecast for all gasoline grades, since premium tracks regular; the
+diesel forecast for diesel). When a grade is not reported for the chosen area, the
+UI falls back to the area's region, then the U.S., and says so: EIA publishes
+diesel only for regions and California. The grade is remembered alongside the area
+and appears in the hash as `#state:TX/diesel`.
 
 ## 7. Prediction model (`js/predict.js`)
 
@@ -215,7 +235,7 @@ two changes it motivated were momentum decay and linear band growth.
 
 Single page, mobile-first, no framework. Reading order matches decision order:
 
-1. **Area control** — dropdown + "Use my location", with a note when a regional fallback is used.
+1. **Area and fuel controls** — dropdown + "Use my location" + grade selector, with a note when a regional fallback is used.
 2. **Verdict card** — the recommendation, a one-line "because…", the plain-English
    summary (position vs. 90-day range + predicted move), the last reported price and
    date, and the deal-score ring. The card's left rule and headline take the verdict
@@ -276,7 +296,5 @@ Breakpoints at 760px (single column, 2×2 price tiles, shorter chart) and 400px
 2. **Custom domain** — DNS A/CNAME records to GitHub Pages; no code change.
 3. **Backtesting the outlook anchor** — needs archived STEO vintages (EIA publishes
    them as monthly files, not through the API); would let the full model be tested.
-4. **Fuel grades / diesel** — EIA publishes the same series for midgrade, premium and
-   diesel; a grade selector is a small extension of the provider and UI.
-5. **Model refinements** — day-of-week seasonality if a daily source is added;
+4. **Model refinements** — day-of-week seasonality if a daily source is added;
    regional pass-through factors; a hurricane-season prior for Gulf Coast areas.
