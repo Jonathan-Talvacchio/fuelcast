@@ -209,7 +209,9 @@ th { color: var(--muted); font-weight: 600; font-size: .8rem; }
   .chart-wrap { height: 240px; }
 }
 @media (max-width: 400px) {
-  .strip { grid-template-columns: 1fr; }
+  .tile { padding: .75rem .8rem; }
+  .tile-value { font-size: 1.45rem; }
+  .card { padding: 1rem; }
 }
 @media (prefers-reduced-motion: reduce) {
   .ring-fill, .range-marker { transition: none; }
