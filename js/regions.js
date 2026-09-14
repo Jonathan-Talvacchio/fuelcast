@@ -42,13 +42,19 @@ export const AREAS = {
 };
 
 // Fuel grades. `lead` names the wholesale series that leads pump prices;
-// `outlook` names which EIA forecast family applies.
+// `outlook` names which EIA forecast family applies. All four are fetched and
+// backtested; the site only lets you pick gas (regular) or diesel — midgrade and
+// premium move in lockstep with regular, so the advice is the same and their
+// prices are shown alongside regular's instead (`also`).
 export const GRADES = {
-  regular:  { name: 'Regular',  short: 'Regular',  product: 'EPMR',  lead: 'rbob', outlook: 'regular' },
+  regular:  { name: 'Regular',  short: 'Gas',    product: 'EPMR',  lead: 'rbob', outlook: 'regular', also: ['midgrade', 'premium'] },
   midgrade: { name: 'Midgrade', short: 'Midgrade', product: 'EPMM',  lead: 'rbob', outlook: 'regular' },
   premium:  { name: 'Premium',  short: 'Premium',  product: 'EPMP',  lead: 'rbob', outlook: 'regular' },
-  diesel:   { name: 'Diesel',   short: 'Diesel',   product: 'EPD2D', lead: 'ulsd', outlook: 'diesel' },
+  diesel:   { name: 'Diesel',   short: 'Diesel', product: 'EPD2D', lead: 'ulsd', outlook: 'diesel' },
 };
+
+// Grades offered in the fuel selector.
+export const FUEL_CHOICES = ['regular', 'diesel'];
 
 export const KIND_LABELS = {
   metro: 'Metro areas',

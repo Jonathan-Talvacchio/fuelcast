@@ -3,7 +3,7 @@
 // analyze() takes an area's price history, the official monthly outlook for
 // its region, and daily wholesale prices, and returns a daily projection plus
 // the summary numbers the UI shows (today / tomorrow / this week / next week,
-// deal score, verdict). Everything is a simple, explainable heuristic.
+// 90-day range, verdict). Everything is a simple, explainable heuristic.
 
 const DAY_MS = 86400000;
 
@@ -23,10 +23,8 @@ export const MODEL = {
   bandPoints: 12,           // changes used for the uncertainty band
   minBand: 0.02,            // $/gal minimum per-step volatility
   flatThreshold: 0.03,      // $/gal; smaller 30-day moves count as "flat"
-  scoreRangeDays: 90,
-  scoreRangeWeight: 0.7,
-  scoreTrendWeight: 0.3,
-  scoreTrendFullSwing: 0.15, // 14-day move that maps to a 0 or 100 trend score
+  rangeDays: 90,            // trailing window for the low / average / high comparison
+  goodPricePos: 0.2,        // today within the bottom fifth of that range counts as a good price
   verdictMove: 0.02,        // $/gal predicted 14-day move that makes timing advice directional
   horizonDays: 30,
 };
@@ -145,12 +143,13 @@ function volatility(series) {
   };
 }
 
-// Timing advice follows the predicted direction; when prices look steady the
-// deal score decides whether it's worth filling up now.
-export function verdictFor(score, change14 = 0) {
+// Timing advice follows the predicted direction; when prices look steady, where
+// today sits in the trailing range (0 = 90-day low, 1 = 90-day high) decides
+// whether it's worth filling up now.
+export function verdictFor(change14, rangePos = 0.5) {
   if (change14 >= MODEL.verdictMove) return { ...VERDICTS.now, why: 'prices are headed up' };
   if (change14 <= -MODEL.verdictMove) return { ...VERDICTS.wait, why: 'prices are headed down' };
-  if (score >= 70) return { ...VERDICTS.now, why: 'this is a good price that is not expected to get better' };
+  if (rangePos <= MODEL.goodPricePos) return { ...VERDICTS.now, why: 'this is a good price that is not expected to get better' };
   return { ...VERDICTS.ok, why: 'prices look steady' };
 }
 
@@ -216,15 +215,13 @@ export function analyze({ series, outlook, regionSeries, wholesale, now = Date.n
   const direction = change30 > MODEL.flatThreshold ? 'rising'
     : change30 < -MODEL.flatThreshold ? 'falling' : 'flat';
 
-  // Deal score: where today sits in the trailing range, plus what's coming.
-  const rangeStart = asOfMs - MODEL.scoreRangeDays * DAY_MS;
+  // Where today sits in the trailing range (0 = the 90-day low, 1 = the high).
+  const rangeStart = asOfMs - MODEL.rangeDays * DAY_MS;
   const window = pts.filter(p => parseDate(p.date) >= rangeStart).map(p => p.price);
   const lo = Math.min(...window, latest.price);
   const hi = Math.max(...window, latest.price);
-  const rangePos = hi > lo ? clamp((hi - today) / (hi - lo), 0, 1) : 0.5;
-  const trendPos = clamp(0.5 + change14 / MODEL.scoreTrendFullSwing / 2, 0, 1);
-  const score = Math.round(100 * (MODEL.scoreRangeWeight * rangePos + MODEL.scoreTrendWeight * trendPos));
-  const verdict = verdictFor(score, change14);
+  const rangePos = hi > lo ? clamp((today - lo) / (hi - lo), 0, 1) : 0.5;
+  const verdict = verdictFor(change14, rangePos);
 
   // Wholesale context for the "what's driving prices" panel.
   const change = (arr, n) => {
@@ -248,8 +245,8 @@ export function analyze({ series, outlook, regionSeries, wholesale, now = Date.n
     daysSinceReport: d0,
     today, tomorrow, thisWeek, nextWeek,
     change14, change30, direction,
-    score, verdict,
-    range: { low: lo, high: hi, avg: mean(window), days: MODEL.scoreRangeDays },
+    verdict,
+    range: { low: lo, high: hi, avg: mean(window), pos: rangePos, days: MODEL.rangeDays },
     drivers: {
       momentumPerWeek: slope * 7,
       wholesaleEffect: lead,

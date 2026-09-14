@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Fuelcast — When should you fill up?</title>
-  <meta name="description" content="Should you buy gas today or wait? See today's average gas price in your area, tomorrow's and this week's predicted prices, a deal score, and where prices are headed.">
+  <meta name="description" content="Should you buy gas today or wait? See today's average gas price in your area, tomorrow's and this week's predicted prices, and where prices are headed.">
   <meta name="theme-color" content="#1f6feb">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⛽</text></svg>">
   <link rel="stylesheet" href="css/style.css">
@@ -47,17 +47,6 @@
           <p id="reason" class="reason">—</p>
           <p class="asof">Latest reported average: <strong id="lastReported">—</strong> on <span id="asOfDate">—</span><span id="stale"></span></p>
         </div>
-        <div class="score" id="scoreBox" aria-label="Deal score">
-          <svg class="ring" viewBox="0 0 120 120" role="img" aria-labelledby="scoreTitle">
-            <title id="scoreTitle">Deal score</title>
-            <circle class="ring-track" cx="60" cy="60" r="52"></circle>
-            <circle class="ring-fill" id="ringFill" cx="60" cy="60" r="52"></circle>
-            <text class="ring-num" id="scoreNum" x="60" y="60">—</text>
-            <text class="ring-cap" x="60" y="82">/ 100</text>
-          </svg>
-          <span class="score-label">Deal score</span>
-          <span class="score-sub" id="scoreSub">—</span>
-        </div>
       </section>
 
       <section class="strip" aria-label="Price outlook">
@@ -65,6 +54,7 @@
           <span class="tile-label">Today <small>(est.)</small></span>
           <span class="tile-value" id="pToday">—</span>
           <span class="tile-delta" id="dToday">per gallon</span>
+          <span class="tile-note" id="otherGrades" hidden></span>
         </div>
         <div class="tile">
           <span class="tile-label">Tomorrow <small>(predicted)</small></span>
@@ -122,9 +112,9 @@
 
       <section class="card how">
         <h2>How this works</h2>
-        <p>Every day we pull the latest <strong>weekly average retail prices</strong> — regular, midgrade and premium gasoline, and diesel — from the U.S. Energy Information Administration (EIA) for your metro, state, or region, along with EIA's daily wholesale gasoline and diesel prices, crude oil, and its official monthly price outlook.</p>
-        <p>The prediction is a simple, transparent estimate: recent momentum in your area's price, the direction wholesale gasoline has moved over the last couple of weeks (pump prices usually follow with a short lag), and — further out — EIA's monthly forecast for your region. The <strong>deal score</strong> asks two questions: how does today's price compare with the last 90 days in your area, and are prices expected to rise or fall over the next two weeks? A high score means "cheap now and likely to get pricier," so fill up.</p>
-        <p class="tip"><strong>Tip:</strong> station prices often creep up ahead of the weekend; early-week fill-ups tend to be a little cheaper. Shop around too — the spread between the cheapest and priciest station in town is usually bigger than any day-to-day move.</p>
+        <p>Every day we pull the latest <strong>weekly average retail prices</strong> for gasoline and diesel from the U.S. Energy Information Administration (EIA) for your metro, state, or region, along with EIA's daily wholesale gasoline and diesel prices, crude oil, and its official monthly price outlook.</p>
+        <p>The prediction is a simple, transparent estimate: recent momentum in your area's price, the direction wholesale gasoline has moved over the last couple of weeks (pump prices usually follow with a short lag), and — further out — EIA's monthly forecast for your region. The recommendation follows the predicted direction: if prices look set to rise, fill up now; if they look set to fall, wait if you can. When they look steady, we say fill up now only if today's price is near the low of the last 90 days in your area.</p>
+        <p class="tip"><strong>Tip:</strong> station prices often creep up ahead of the weekend; early-week fill-ups tend to be a little cheaper. Shop around too — the spread between the cheapest and priciest station in town is usually bigger than any day-to-day move. Midgrade and premium move with regular almost cent for cent, so the same advice applies; their estimated prices sit under Today.</p>
       </section>
     </div>
   </main>

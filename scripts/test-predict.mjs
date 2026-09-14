@@ -49,12 +49,12 @@ test('outlookAt interpolates between month midpoints and clamps at the ends', ()
   assert.ok(Number.isNaN(outlookAt([], 0)));
 });
 
-test('verdict: direction first, then deal score when steady', () => {
-  assert.equal(verdictFor(10, 0.05).key, 'now');   // rising → buy now even if pricey
-  assert.equal(verdictFor(90, -0.05).key, 'wait'); // falling → wait even if cheap
-  assert.equal(verdictFor(70, 0).key, 'now');      // steady + great price
-  assert.equal(verdictFor(69, 0).key, 'ok');
-  assert.equal(verdictFor(0, 0.01).key, 'ok');     // steady + pricey → no rush, no deal
+test('verdict: direction first, then position in the 90-day range when steady', () => {
+  assert.equal(verdictFor(0.05, 0.9).key, 'now');   // rising → buy now even if pricey
+  assert.equal(verdictFor(-0.05, 0.1).key, 'wait'); // falling → wait even if cheap
+  assert.equal(verdictFor(0, 0.2).key, 'now');      // steady + near the 90-day low
+  assert.equal(verdictFor(0, 0.21).key, 'ok');
+  assert.equal(verdictFor(0.01, 1).key, 'ok');      // steady + pricey → no rush, no deal
 });
 
 test('analyze: long decline just turning up → fill up now', () => {
@@ -67,7 +67,7 @@ test('analyze: long decline just turning up → fill up now', () => {
   assert.ok(r.nextWeek > r.thisWeek);
   assert.ok(r.change14 > 0);
   assert.equal(r.direction, 'rising');
-  assert.ok(r.score >= 70, `score ${r.score}`);
+  assert.ok(r.range.pos <= 0.3, `range position ${r.range.pos}`);
   assert.equal(r.verdict.key, 'now');
   assert.equal(r.projection[0].day, 0);
   assert.equal(r.projection[0].price, r.lastReported);
@@ -80,7 +80,7 @@ test('analyze: recent spike now easing → wait', () => {
   const r = analyze({ series, wholesale: { rbob: daily(15, i => 2.3 - i * 0.02) }, now });
   assert.ok(r.tomorrow < r.today);
   assert.equal(r.direction, 'falling');
-  assert.ok(r.score < 40, `score ${r.score}`);
+  assert.ok(r.range.pos >= 0.7, `range position ${r.range.pos}`);
   assert.equal(r.verdict.key, 'wait');
 });
 
@@ -117,11 +117,11 @@ test('analyze: region offset shifts the anchor by the area premium', () => {
   assert.equal(r.drivers.outlook[0].price, 4.0);
 });
 
-test('analyze: flat market scores in the middle and reports flat', () => {
+test('analyze: flat market sits mid-range and reports flat', () => {
   const series = weekly(20, () => 3.25);
   const r = analyze({ series, now });
   assert.equal(r.direction, 'flat');
-  assert.equal(r.score, 50);
+  assert.equal(r.range.pos, 0.5);
   assert.equal(r.verdict.key, 'ok');
   assert.equal(r.range.low, 3.25);
   assert.equal(r.range.high, 3.25);

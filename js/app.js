@@ -1,4 +1,4 @@
-import { AREAS, STATES, GRADES, KIND_LABELS, areaForCoords } from './regions.js';
+import { AREAS, STATES, GRADES, FUEL_CHOICES, KIND_LABELS, areaForCoords } from './regions.js';
 import { analyze, parseDate } from './predict.js';
 import { renderChart, fillTable } from './chart.js';
 
@@ -10,7 +10,11 @@ const DAY_MS = 86400000;
 
 const $ = id => document.getElementById(id);
 const money = v => `$${v.toFixed(2)}`;
-const cents = v => `${Math.abs(Math.round(v * 100))}¢`;
+// Small amounts read best in cents; a dollar or more reads better as dollars.
+const cents = v => {
+  const c = Math.abs(Math.round(v * 100));
+  return c >= 100 ? `$${(c / 100).toFixed(2)}` : `${c}¢`;
+};
 const fmtDate = s => new Date(parseDate(s)).toLocaleDateString(undefined, { month: 'short', day: 'numeric', timeZone: 'UTC' });
 const fmtMonth = s => new Date(parseDate(s)).toLocaleDateString(undefined, { month: 'long', year: 'numeric', timeZone: 'UTC' });
 
@@ -56,10 +60,17 @@ function resolveSelection(value) {
   return null;
 }
 
-// URL hash: "#state:TX" or "#state:TX/diesel".
+// URL hash: "#state:TX" or "#state:TX/diesel". Old midgrade / premium links
+// are folded into gas (regular).
+const FUEL_ALIASES = { midgrade: 'regular', premium: 'regular' };
+function resolveFuel(g) {
+  const key = FUEL_ALIASES[g] || g;
+  return FUEL_CHOICES.includes(key) ? key : null;
+}
+
 function parseHash() {
   const [sel, g] = decodeURIComponent(location.hash.slice(1)).split('/');
-  return { sel: resolveSelection(sel) ? sel : null, grade: GRADES[g] ? g : null };
+  return { sel: resolveSelection(sel) ? sel : null, grade: resolveFuel(g) };
 }
 
 function initialSelection() {
@@ -76,8 +87,8 @@ function initialGrade() {
   const h = parseHash();
   if (h.grade) return h.grade;
   try {
-    const stored = localStorage.getItem(GRADE_KEY);
-    if (GRADES[stored]) return stored;
+    const stored = resolveFuel(localStorage.getItem(GRADE_KEY));
+    if (stored) return stored;
   } catch { /* storage unavailable */ }
   return 'regular';
 }
@@ -89,9 +100,9 @@ function persist(value) {
 
 function buildGradeSelect() {
   const box = $('gradeSelect');
-  box.replaceChildren(...Object.entries(GRADES).map(([key, g]) => {
+  box.replaceChildren(...FUEL_CHOICES.map(key => {
     const b = document.createElement('button');
-    b.type = 'button'; b.setAttribute('role', 'radio'); b.dataset.grade = key; b.textContent = g.short;
+    b.type = 'button'; b.setAttribute('role', 'radio'); b.dataset.grade = key; b.textContent = GRADES[key].short;
     b.addEventListener('click', () => {
       if (grade === key) return;
       grade = key;
@@ -148,8 +159,7 @@ function delta(el, value, base, suffix) {
 }
 
 function reasonText(r, areaLabel) {
-  const span = r.range.high - r.range.low;
-  const pos = span > 0.001 ? (r.today - r.range.low) / span : 0.5;
+  const pos = r.range.pos;
   const where = pos <= 0.2 ? 'near their 90-day low'
     : pos <= 0.45 ? 'below their recent average'
     : pos <= 0.7 ? 'around their recent average'
@@ -162,10 +172,17 @@ function reasonText(r, areaLabel) {
   return `${where2} are ${where} and ${trend}.`;
 }
 
-function scoreSub(r) {
-  if (r.score >= 70) return 'Great price vs. last 90 days';
-  if (r.score >= 40) return 'Fair price vs. last 90 days';
-  return 'Pricey vs. last 90 days';
+// Midgrade / premium track regular almost exactly, so estimate each as its
+// latest reported price plus whatever move regular is estimated to have made.
+function otherGradesText(r, areaId, g) {
+  const parts = (g.also || []).map(key => {
+    const s = pickSeries(data.areas[areaId], key);
+    if (!s) return null;
+    const last = s[s.length - 1];
+    if (last.date !== r.asOf) return null;
+    return `${GRADES[key].name} ≈ ${money(last.price + (r.today - r.lastReported))}`;
+  }).filter(Boolean);
+  return parts.join(' · ');
 }
 
 function renderDrivers(r, g) {
@@ -250,14 +267,11 @@ function render(selectionValue) {
   $('stale').innerHTML = r.daysSinceReport > 14
     ? ` <span class="stale-flag">(${r.daysSinceReport} days old — treat predictions with extra caution)</span>` : '';
 
-  $('scoreNum').textContent = r.score;
-  $('scoreBox').dataset.tier = r.score >= 70 ? 'good' : r.score >= 40 ? 'warn' : 'bad';
-  $('ringFill').style.strokeDashoffset = (326.7 * (1 - r.score / 100)).toFixed(1);
-  $('scoreSub').textContent = scoreSub(r);
-
   $('pToday').textContent = money(r.today);
   $('dToday').textContent = r.daysSinceReport > 0
     ? `est. from ${fmtDate(r.asOf)} report` : `per gallon, ${g.name.toLowerCase()}`;
+  $('otherGrades').textContent = otherGradesText(r, found.areaId, g);
+  $('otherGrades').hidden = !$('otherGrades').textContent;
   $('pTomorrow').textContent = money(r.tomorrow);
   delta($('dTomorrow'), r.tomorrow, r.today, 'vs today');
   $('pThisWeek').textContent = money(r.thisWeek);
@@ -268,9 +282,7 @@ function render(selectionValue) {
   $('rLow').textContent = money(r.range.low);
   $('rAvg').textContent = money(r.range.avg);
   $('rHigh').textContent = money(r.range.high);
-  const span = r.range.high - r.range.low;
-  const pos = span > 0.001 ? Math.min(1, Math.max(0, (r.today - r.range.low) / span)) : 0.5;
-  $('rMarker').style.left = `${(pos * 100).toFixed(1)}%`;
+  $('rMarker').style.left = `${(r.range.pos * 100).toFixed(1)}%`;
   $('rNote').textContent = `Today's estimate is ${cents(r.today - r.range.low)} above the 90-day low and ${cents(r.range.high - r.today)} below the high.`;
 
   renderDrivers(r, g);

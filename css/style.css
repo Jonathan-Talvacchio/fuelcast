@@ -119,7 +119,7 @@ select { width: 100%; }
 .status.info { background: var(--surface); border-color: var(--border); color: var(--muted); }
 
 /* Verdict */
-.verdict { display: grid; grid-template-columns: 1fr auto; gap: 1.25rem; align-items: center; border-left: 6px solid var(--verdict, var(--accent)); }
+.verdict { border-left: 6px solid var(--verdict, var(--accent)); }
 .verdict[data-verdict="now"]  { --verdict: var(--good); --verdict-bg: var(--good-bg); }
 .verdict[data-verdict="ok"]   { --verdict: var(--warn); --verdict-bg: var(--warn-bg); }
 .verdict[data-verdict="wait"] { --verdict: var(--bad);  --verdict-bg: var(--bad-bg); }
@@ -130,22 +130,6 @@ select { width: 100%; }
 .asof { margin: 0; font-size: .85rem; color: var(--muted); }
 .stale-flag { color: var(--bad); font-weight: 600; }
 
-.score { display: flex; flex-direction: column; align-items: center; gap: .1rem; min-width: 140px; }
-.score[data-tier="good"] { --tier: var(--good); }
-.score[data-tier="warn"] { --tier: var(--warn); }
-.score[data-tier="bad"]  { --tier: var(--bad); }
-.ring { width: 120px; height: 120px; }
-.ring-track { fill: none; stroke: var(--surface-2); stroke-width: 10; }
-.ring-fill {
-  fill: none; stroke: var(--tier, var(--accent)); stroke-width: 10; stroke-linecap: round;
-  transform: rotate(-90deg); transform-origin: 50% 50%;
-  stroke-dasharray: 326.7; stroke-dashoffset: 326.7;
-  transition: stroke-dashoffset .6s ease;
-}
-.ring-num { font-size: 34px; font-weight: 700; fill: var(--text); text-anchor: middle; dominant-baseline: central; }
-.ring-cap { font-size: 11px; fill: var(--muted); text-anchor: middle; }
-.score-label { font-size: .85rem; font-weight: 600; color: var(--text-2); }
-.score-sub { font-size: .8rem; color: var(--tier, var(--muted)); font-weight: 600; }
 
 /* Price strip */
 .strip { display: grid; grid-template-columns: repeat(4, 1fr); gap: .75rem; margin-top: 1rem; }
@@ -159,6 +143,7 @@ select { width: 100%; }
 .tile-delta { font-size: .85rem; color: var(--muted); }
 .tile-delta.up { color: var(--bad); }
 .tile-delta.down { color: var(--good); }
+.tile-note { font-size: .78rem; color: var(--muted); margin-top: .15rem; }
 
 /* Chart */
 .chart-wrap { position: relative; height: 300px; }
@@ -207,15 +192,12 @@ th { color: var(--muted); font-weight: 600; font-size: .8rem; }
 .disclaimer { font-size: .9rem; color: var(--text-2); }
 
 /* Skeleton */
-.skeleton .tile-value, .skeleton .ring-num { opacity: .3; }
+.skeleton .tile-value { opacity: .3; }
 
 @media (max-width: 760px) {
   .control-grade { flex-basis: 100%; }
   .segmented { display: flex; }
   .segmented button { flex: 1; padding-inline: .3rem; }
-  .verdict { grid-template-columns: 1fr; }
-  .score { flex-direction: row; gap: .75rem; justify-content: flex-start; }
-  .score .ring { width: 88px; height: 88px; }
   .strip { grid-template-columns: repeat(2, 1fr); }
   .grid2 { grid-template-columns: 1fr; }
   .chart-wrap { height: 240px; }
@@ -226,5 +208,5 @@ th { color: var(--muted); font-weight: 600; font-size: .8rem; }
   .card { padding: 1rem; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .ring-fill, .range-marker { transition: none; }
+  .range-marker { transition: none; }
 }

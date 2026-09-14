@@ -2,13 +2,13 @@
 
 **Status:** Live at <https://jonathan-talvacchio.github.io/fuelcast/>
 **Repo:** <https://github.com/Jonathan-Talvacchio/fuelcast>
-**Last updated:** 2026-09-13 (backtest per grade, fuel grades added)
+**Last updated:** 2026-09-13 (deal score removed; selector reduced to Gas · Diesel)
 
 ## 1. Overview
 
 Fuelcast answers one question for a driver: **should I fill up today, or wait?**
 It shows the average price of regular gasoline in the visitor's area, predicted
-prices for tomorrow, this week and next week, a 0–100 deal score, a two-week trend
+prices for tomorrow, this week and next week, a two-week trend
 chart, and the factors moving prices — all from free public data, on a site that
 costs nothing to run.
 
@@ -22,7 +22,7 @@ it is likely headed.
 
 - Give a clear, honest recommendation (fill up now / no rush / wait) with the reasoning visible.
 - Show today, tomorrow, this-week and next-week prices for the visitor's area.
-- Provide a deal score and a short-term trend with an uncertainty range.
+- Show where today sits in the 90-day range and a short-term trend with an uncertainty range.
 - Run at $0 indefinitely: static hosting, free data, no servers, no keys in the browser.
 - Make swapping in a paid, higher-resolution data source a one-file change.
 - Be usable on a phone in a few seconds, including a "use my location" shortcut.
@@ -82,7 +82,7 @@ There are two moving parts and nothing else:
 
 | Data | Route | Series | Cadence | Use |
 |---|---|---|---|---|
-| Retail prices, $/gal | `petroleum/pri/gnd` | products `EPMR` regular, `EPMM` midgrade, `EPMP` premium (29 areas each), `EPD2D` diesel (11 areas: U.S., regions, California) | Weekly (Mondays) | Price history, "today", deal score |
+| Retail prices, $/gal | `petroleum/pri/gnd` | products `EPMR` regular, `EPMM` midgrade, `EPMP` premium (29 areas each), `EPD2D` diesel (11 areas: U.S., regions, California) | Weekly (Mondays) | Price history, "today", 90-day range |
 | Regular gasoline retail outlook, ¢/gal | `steo` | `MGRARUS`, `MGRARP1`–`MGRARP5` | Monthly, ~15 months ahead | Anchor for the 1–4 week projection (all gasoline grades); "official outlook" panel |
 | Diesel retail outlook, ¢/gal | `steo` | `DSRTUUS` (U.S. only) | Monthly | Anchor for diesel, offset to the area |
 | NY Harbor RBOB gasoline spot, $/gal | `petroleum/pri/spt` | `EER_EPMRU_PF4_Y35NY_DPG` | Daily | Leading indicator for gasoline pump prices |
@@ -145,14 +145,24 @@ U.S. average. Selecting a state without its own series shows a note explaining
 which regional average is being used. Selection is stored in `localStorage` and
 mirrored in the URL hash (`#state:TX`) so links are shareable.
 
-**Fuel grades.** A segmented control offers Regular · Midgrade · Premium · Diesel
-(`GRADES` in `regions.js`). Each grade names the wholesale series that leads it
-(RBOB for gasoline, ULSD for diesel) and the outlook family it follows (the
-regular-gasoline forecast for all gasoline grades, since premium tracks regular; the
-diesel forecast for diesel). When a grade is not reported for the chosen area, the
-UI falls back to the area's region, then the U.S., and says so: EIA publishes
-diesel only for regions and California. The grade is remembered alongside the area
-and appears in the hash as `#state:TX/diesel`.
+**Fuel.** A segmented control offers Gas · Diesel (`FUEL_CHOICES` in `regions.js`).
+All four EIA grades are fetched and backtested (`GRADES`), but midgrade and premium
+are not selectable: in two years of data their week-to-week moves correlate 0.97–1.00
+with regular's in 27 of 29 areas, and the backtest gives the same direction accuracy
+(72%) for all three — so the verdict would be identical, and a four-way control only
+added noise. What *does* differ is the level: premium runs 42¢ (Los Angeles) to $1.12
+(Chicago) over regular, and the gap is stable within an area (±1–4¢). So the Today
+tile shows "Midgrade ≈ $x · Premium ≈ $y", each estimated as that grade's latest
+report plus regular's estimated move since then. Diesel earns its own choice: it
+correlates only ~0.89 with regular, has its own wholesale lead (ULSD vs. RBOB), its
+own outlook family and its own areas.
+
+Each grade names the wholesale series that leads it and the outlook family it follows
+(the regular-gasoline forecast for all gasoline grades; the diesel forecast for
+diesel). When a grade is not reported for the chosen area, the UI falls back to the
+area's region, then the U.S., and says so: EIA publishes diesel only for regions and
+California. The fuel is remembered alongside the area and appears in the hash as
+`#state:TX/diesel`; old `/midgrade` and `/premium` links resolve to gas.
 
 ## 7. Prediction model (`js/predict.js`)
 
@@ -190,23 +200,23 @@ today = `price(d₀)`, tomorrow = `price(d₀+1)`, this week = mean of days `d�
 next week = mean of `d₀+8…d₀+14`, `Δ14 = price(d₀+14) − today`,
 direction over 30 days = rising / falling / flat (±$0.03 threshold).
 
-**Deal score (0–100).**
-`range = (high₉₀ − today) / (high₉₀ − low₉₀)` — 1 when today is the 90-day low;
-`trend = clamp(0.5 + Δ14 / 0.15 / 2, 0, 1)` — 1 when a 15¢ rise is expected;
-`score = round(100 × (0.7·range + 0.3·trend))`.
-Tiers: ≥70 great price, 40–69 fair, <40 pricey.
+**90-day range.** `pos = (today − low₉₀) / (high₉₀ − low₉₀)` — 0 when today is the
+90-day low, 1 at the high. Shown as the low / average / high bar and used for the
+plain-English "near their 90-day low / around their recent average / …" summary.
 
-**Verdict.** Timing advice follows direction first, then the score:
+**Verdict.** Timing advice follows direction first, then the range position:
 
 | Condition | Verdict | Shown reason |
 |---|---|---|
 | `Δ14 ≥ +$0.02` | Fill up now | prices are headed up |
 | `Δ14 ≤ −$0.02` | Wait if you can — top off only | prices are headed down |
-| otherwise, score ≥ 70 | Fill up now | a good price that is not expected to get better |
+| otherwise, `pos ≤ 0.2` | Fill up now | a good price that is not expected to get better |
 | otherwise | No rush — fill when convenient | prices look steady |
 
-Decoupling verdict from score was a deliberate fix: an earlier version derived the
-verdict from the score alone and could say "wait" while predicting a rise.
+Direction comes first by design: an earlier version derived the verdict from a
+blended 0–100 "deal score" and could say "wait" while predicting a rise. The score
+was later dropped from the UI entirely — one number that mixed "cheap vs. the last
+90 days" with "expected to rise" was harder to read than the two facts it summarized.
 
 All constants live in one `MODEL` object so they can be tuned in one place.
 
@@ -242,11 +252,10 @@ the site optimizes for the decision, not the point forecast.
 
 Single page, mobile-first, no framework. Reading order matches decision order:
 
-1. **Area and fuel controls** — dropdown + "Use my location" + grade selector, with a note when a regional fallback is used.
+1. **Area and fuel controls** — dropdown + "Use my location" + Gas/Diesel toggle, with a note when a regional fallback is used.
 2. **Verdict card** — the recommendation, a one-line "because…", the plain-English
-   summary (position vs. 90-day range + predicted move), the last reported price and
-   date, and the deal-score ring. The card's left rule and headline take the verdict
-   color; the ring takes the score-tier color — two different signals, two colors.
+   summary (position vs. 90-day range + predicted move), and the last reported price
+   and date. The card's left rule and headline take the verdict color.
 3. **Price strip** — Today (est.) · Tomorrow · This week avg · Next week avg, each
    with a rounded-cents delta so the numbers and deltas never contradict.
 4. **Trend chart** — 13 weeks reported (solid, points) + 14 days predicted (dashed)

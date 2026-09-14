@@ -1,11 +1,11 @@
 # ⛽ Fuelcast
 
 **Should you fill up today, or wait?** Fuelcast shows today's average gas price
-for your area, tomorrow's and this week's predicted prices, a deal score, and where
+for your area, tomorrow's and this week's predicted prices, and where
 prices are headed — using free public data, hosted for free on GitHub Pages.
 
 - **Data:** U.S. Energy Information Administration (EIA) — weekly retail prices for
-  regular, midgrade and premium gasoline and diesel across the U.S., 5 regions (+3
+  gasoline (regular, midgrade, premium) and diesel across the U.S., 5 regions (+3
   East Coast sub-regions), 9 states and 10 metros (diesel: regions and California);
   EIA's official monthly price outlook; daily wholesale gasoline (RBOB), diesel (ULSD)
   and crude (WTI) spot prices.
@@ -69,7 +69,7 @@ index.html              the page
 css/style.css           styles (light + dark)
 js/app.js               UI wiring, area selection, geolocation
 js/regions.js           area catalog, state → area map, centroids
-js/predict.js           prediction model + deal score (pure, tested)
+js/predict.js           prediction model + verdict (pure, tested)
 js/chart.js             trend chart
 data/prices.json        generated data (committed by the Actions job)
 scripts/fetch-data.mjs  fetches from the provider, validates, writes data/prices.json

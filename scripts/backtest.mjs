@@ -158,7 +158,7 @@ function walk(history, grade, useWholesale = true, onlyArea = null) {
       rows.push({
         grade, area, asOf, a0, a1, a2,
         f7: p7.price, f14: p14.price, lo7: p7.low, hi7: p7.high, lo14: p14.low, hi14: p14.high,
-        change14: r.change14, verdict: r.verdict.key, score: r.score,
+        change14: r.change14, verdict: r.verdict.key,
       });
     }
   }
