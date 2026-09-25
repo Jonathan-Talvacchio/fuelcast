@@ -16,6 +16,8 @@ const cents = v => {
   return c >= 100 ? `$${(c / 100).toFixed(2)}` : `${c}¢`;
 };
 const fmtDate = s => new Date(parseDate(s)).toLocaleDateString(undefined, { month: 'short', day: 'numeric', timeZone: 'UTC' });
+// For values interpolated into innerHTML templates.
+const esc = s => String(s).replace(/[&<>"']/g, c => `&#${c.charCodeAt(0)};`);
 const fmtMonth = s => new Date(parseDate(s)).toLocaleDateString(undefined, { month: 'long', year: 'numeric', timeZone: 'UTC' });
 
 let data = null;
@@ -200,14 +202,14 @@ function renderDrivers(r, g) {
     const eff = r.drivers.wholesaleEffect;
     const what = g.lead === 'ulsd' ? 'Wholesale diesel (ULSD)' : 'Wholesale gasoline';
     items.push({
-      ico: '🛢️', t: `${what} ${chip(w.delta, `${(w.pct * 100).toFixed(1)}%`)} <span class="muted">${money(w.to)}/gal (${fmtDate(w.asOf)})</span>`,
+      ico: '🛢️', t: `${what} ${chip(w.delta, `${(w.pct * 100).toFixed(1)}%`)} <span class="muted">${money(w.to)}/gal (${esc(fmtDate(w.asOf))})</span>`,
       d: `NY Harbor spot price over the last ~2 weeks. Pump prices usually follow within 1–2 weeks: ${Math.abs(eff) < 0.005 ? 'little effect expected' : `roughly ${eff > 0 ? '+' : '−'}${cents(eff)} at the pump`}.`,
     });
   }
   if (r.drivers.wti) {
     const w = r.drivers.wti;
     items.push({
-      ico: '🌍', t: `Crude oil (WTI) ${chip(w.delta, `${(w.pct * 100).toFixed(1)}%`)} <span class="muted">$${w.to.toFixed(2)}/bbl (${fmtDate(w.asOf)})</span>`,
+      ico: '🌍', t: `Crude oil (WTI) ${chip(w.delta, `${(w.pct * 100).toFixed(1)}%`)} <span class="muted">$${w.to.toFixed(2)}/bbl (${esc(fmtDate(w.asOf))})</span>`,
       d: `Crude is the biggest ingredient in ${g.lead === 'ulsd' ? 'diesel' : 'gasoline'} prices; big moves here show up at the pump over the following weeks.`,
     });
   }
@@ -217,7 +219,7 @@ function renderDrivers(r, g) {
   const ol = $('outlook');
   if (r.drivers.outlook.length) {
     ol.innerHTML = r.drivers.outlook.map(o =>
-      `<li><span class="m">${fmtMonth(o.month + '-01')}</span><strong>${money(o.price)}</strong></li>`).join('');
+      `<li><span class="m">${esc(fmtMonth(o.month + '-01'))}</span><strong>${money(o.price)}</strong></li>`).join('');
   } else {
     ol.innerHTML = '<li class="muted">No official outlook available for this fuel and area.</li>';
   }
@@ -361,7 +363,7 @@ async function main() {
 
   const generated = new Date(data.generatedAt);
   $('updatedAt').textContent = generated.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
-  if (data.source && data.source.url) $('sourceLink').href = data.source.url;
+  if (/^https:\/\//.test(data.source?.url || '')) $('sourceLink').href = data.source.url;
   const ageDays = (Date.now() - generated.getTime()) / DAY_MS;
   setStatus(ageDays > STALE_DAYS
     ? `Heads up: this data was last updated ${Math.round(ageDays)} days ago, so the numbers may be out of date.` : '');

@@ -6,7 +6,8 @@
 import { AREAS, GRADES } from '../../js/regions.js';
 
 const BASE = 'https://api.eia.gov/v2';
-const WEEKS_OF_HISTORY = 104;
+// The site uses ~13 weeks; 40 keeps `backtest.mjs --site-data` (26-report warm-up) working.
+const WEEKS_OF_HISTORY = 40;
 const WHOLESALE_DAYS = 90;
 
 // STEO series ids (cents/gal) by outlook family and PADD.
@@ -80,7 +81,6 @@ export async function fetchPrices({ apiKey }) {
       p.weekly = p.weekly.slice(-WEEKS_OF_HISTORY);
       if (p.weekly.length < 8) delete a.prices[grade];   // not really reported for this area
     }
-    a.weekly = a.prices.regular ? a.prices.regular.weekly : [];   // alias kept for older consumers
   }
 
   // 2. Monthly outlook (STEO), cents → dollars, keyed by outlook family then PADD.

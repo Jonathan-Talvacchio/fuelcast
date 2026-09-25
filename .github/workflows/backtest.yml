@@ -22,8 +22,8 @@ jobs:
   backtest:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 20
 
@@ -33,9 +33,15 @@ jobs:
       - name: Run backtest
         env:
           EIA_API_KEY: ${{ secrets.EIA_API_KEY }}
-        run: node scripts/backtest.mjs --years ${{ inputs.years }} ${{ inputs.sweep && '--sweep' || '' }} --report | tee backtest.log
+          # Inputs go through env, never straight into the script, so they can't inject shell.
+          YEARS: ${{ inputs.years }}
+          SWEEP: ${{ inputs.sweep && '--sweep' || '' }}
+        run: |
+          set -o pipefail
+          [[ "$YEARS" =~ ^[0-9]{1,2}$ ]] || { echo "years must be a number, got '$YEARS'"; exit 1; }
+          node scripts/backtest.mjs --years "$YEARS" $SWEEP --report | tee backtest.log
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: backtest-results
           path: |

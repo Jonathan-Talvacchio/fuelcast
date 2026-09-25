@@ -33,8 +33,7 @@ that resolves to:
                      "daily":  [ { "date": "2026-09-12", "price": 3.62 } ] },  // optional; preferred when present
         "premium": { "weekly": [ ... ] }
         // a grade missing here makes the UI fall back to the area's padd, then NUS
-      },
-      "weekly": [ ... ]           // alias of prices.regular.weekly, kept for older consumers
+      }
     }
   },
   "outlook": {                    // monthly forecast, $/gal, by outlook family then padd id

@@ -56,7 +56,7 @@ it is likely headed.
    scripts/fetch-data.mjs ──► scripts/providers/eia.mjs
                          │  normalize + validate
                          ▼
-               data/prices.json  (committed to main, ~120 KB)
+               data/prices.json  (committed to main, ~160 KB)
                          │  deploy job (same workflow)
                          ▼
                   GitHub Pages (static)
@@ -100,10 +100,9 @@ There are two moving parts and nothing else:
   "areas": {
     "STX": { "name": "Texas", "kind": "state", "padd": "R30",
              "prices": {
-               "regular": { "weekly": [ { "date": "2026-09-07", "price": 3.618 } ] },  // oldest → newest, 104 weeks
+               "regular": { "weekly": [ { "date": "2026-09-07", "price": 3.618 } ] },  // oldest → newest, 40 weeks
                "premium": { "weekly": [ ... ] }            // a missing grade → UI falls back to padd, then NUS
-             },
-             "weekly": [ ... ] }                           // alias of prices.regular.weekly
+             } }
   },
   "outlook":   { "regular": { "R30": [ { "month": "2026-10", "price": 3.589 } ] },   // by family, then PADD
                  "diesel":  { "NUS": [ ... ] } },
@@ -113,7 +112,7 @@ There are two moving parts and nothing else:
 }
 ```
 
-The file is about 500 KB with four grades (about 120 KB gzipped over Pages).
+The file is about 160 KB with four grades (about 22 KB gzipped over Pages).
 
 Area ids are EIA `duoarea` codes so the data file and `js/regions.js` agree without
 a mapping layer. The fetch script rejects a file with fewer than 8 history points

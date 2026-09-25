@@ -29,7 +29,7 @@ await mkdir(dirname(output), { recursive: true });
 await writeFile(output, JSON.stringify(data));
 
 const areaCount = Object.keys(data.areas).length;
-const latest = Object.values(data.areas).map(a => a.weekly.at(-1)?.date).sort().at(-1);
+const latest = Object.values(data.areas).map(a => a.prices.regular?.weekly.at(-1)?.date).sort().at(-1);
 const coverage = Object.keys(data.grades).map(g =>
   `${g} ${Object.values(data.areas).filter(a => a.prices[g]).length}/${areaCount}`).join(', ');
 console.log(`Wrote ${output}: ${areaCount} areas, latest retail ${latest}; grade coverage: ${coverage}; `
