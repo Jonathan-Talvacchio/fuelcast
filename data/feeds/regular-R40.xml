@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>Fuelcast: Rocky Mountain · Gas</title>
+    <link>https://jonathan-talvacchio.github.io/fuelcast/#area%3AR40</link>
+    <atom:link href="https://jonathan-talvacchio.github.io/fuelcast/data/feeds/regular-R40.xml" rel="self" type="application/rss+xml"/>
+    <description>An item each time Fuelcast&apos;s buy-or-wait advice for gas in Rocky Mountain changes.</description>
+    <language>en-us</language>
+    <lastBuildDate>Sun, 04 Oct 2026 21:00:00 GMT</lastBuildDate>
+    <ttl>720</ttl>
+    <item>
+      <title>Rocky Mountain gas: Wait if you can — top off only</title>
+      <link>https://jonathan-talvacchio.github.io/fuelcast/#area%3AR40</link>
+      <guid isPermaLink="false">fuelcast-regular-R40-2026-10-04-wait</guid>
+      <pubDate>Sun, 04 Oct 2026 21:00:00 GMT</pubDate>
+      <description>Fuelcast&apos;s advice for gas in Rocky Mountain changed to &quot;Wait if you can — top off only&quot; on 2026-10-04. Open the page for today&apos;s prices, the odds and the forecast.</description>
+    </item>
+  </channel>
+</rss>
