@@ -18,8 +18,9 @@ export const MODEL = {
   leadMaxEffect: 0.25,      // $/gal cap on wholesale effect
   leadStartDay: 2,          // days before wholesale change starts showing
   leadFullDay: 14,          // day by which the wholesale change is fully passed through
-  anchorStartDay: 7,        // projection starts blending toward outlook here...
-  anchorFullDay: 30,        // ...and is fully anchored here
+  anchorStartDay: 21,       // projection starts blending toward outlook here (after the 2-week window the
+                            // verdict uses: archived outlooks made the buy/wait call worse — docs/BACKTEST.md)...
+  anchorFullDay: 45,        // ...and is fully anchored here
   bandPoints: 12,           // changes used for the uncertainty band
   minBand: 0.02,            // $/gal minimum per-step volatility
   flatThreshold: 0.03,      // $/gal; smaller 30-day moves count as "flat"
@@ -144,6 +145,22 @@ function volatility(series) {
   };
 }
 
+// Historical odds for a forecast: interpolates a table from js/calibration.js
+// (rows of { x: predicted 14-day change, p: share lower a week later, move:
+// average 7-day change }) at this forecast. Null without a table.
+export function oddsFor(change14, table) {
+  if (!table || !table.length || !Number.isFinite(change14)) return null;
+  const t = [...table].sort((a, b) => a.x - b.x);
+  if (change14 <= t[0].x) return { pLower: t[0].p, move7: t[0].move };
+  for (let i = 1; i < t.length; i++) {
+    if (change14 <= t[i].x) {
+      const f = (change14 - t[i - 1].x) / (t[i].x - t[i - 1].x);
+      return { pLower: t[i - 1].p + f * (t[i].p - t[i - 1].p), move7: t[i - 1].move + f * (t[i].move - t[i - 1].move) };
+    }
+  }
+  return { pLower: t[t.length - 1].p, move7: t[t.length - 1].move };
+}
+
 // Timing advice follows the predicted direction; when prices look steady, where
 // today sits in the trailing range (0 = 90-day low, 1 = 90-day high) decides
 // whether it's worth filling up now. Given yesterday's call (`prev`), the wait
@@ -166,8 +183,9 @@ export function verdictFor(change14, rangePos = 0.5, prev = null) {
  *        `spot` is the wholesale series that leads this fuel's pump price (RBOB for gasoline, ULSD for diesel); `rbob` is accepted as a fallback
  * @param {number} [p.now]  ms timestamp for "today" (defaults to Date.now())
  * @param {string|null} [p.prevVerdict]  the previous day's verdict key, for hysteresis
+ * @param {{x:number,p:number,move:number}[]} [p.odds]  calibration table for this grade (js/calibration.js)
  */
-export function analyze({ series, outlook, regionSeries, wholesale, now = Date.now(), prevVerdict = null }) {
+export function analyze({ series, outlook, regionSeries, wholesale, now = Date.now(), prevVerdict = null, odds = null }) {
   if (!series || !series.length) throw new Error('No price history for this area');
   const pts = [...series].sort((a, b) => parseDate(a.date) - parseDate(b.date));
   const latest = pts[pts.length - 1];
@@ -251,6 +269,7 @@ export function analyze({ series, outlook, regionSeries, wholesale, now = Date.n
     today, tomorrow, thisWeek, nextWeek,
     change14, change30, direction,
     verdict,
+    odds: oddsFor(change14, odds),
     range: { low: lo, high: hi, avg: mean(window), pos: rangePos, days: MODEL.rangeDays },
     drivers: {
       momentumPerWeek: slope * 7,

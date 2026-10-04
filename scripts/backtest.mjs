@@ -7,6 +7,7 @@
 //   node scripts/backtest.mjs --report        # write docs/BACKTEST.md
 //   node scripts/backtest.mjs --refresh       # re-download history (cached in .cache/)
 //   node scripts/backtest.mjs --site-data     # offline smoke test using data/prices.json
+//   node scripts/backtest.mjs --calibrate     # also write js/calibration.js (odds shown on the site)
 //
 // What is tested: the momentum + wholesale-lead core of js/predict.js, for each
 // fuel grade, walking forward one weekly report at a time with only the data
@@ -29,8 +30,12 @@
 //              would have had that evening: retail reports published before that
 //              day, and EIA spot prices as EIA posts them (Wednesdays, through
 //              Tuesday) — with and without the NYMEX futures fill
-//              (scripts/providers/futures.mjs). Actual prices between weekly
-//              reports are interpolated.
+//              (scripts/providers/futures.mjs), and with the EIA outlook edition
+//              that was out on that date (scripts/data/steo-vintages.json).
+//              Actual prices between weekly reports are interpolated.
+//   odds       from the daily rows, how often the price was lower a week later
+//              and the average move, by forecast size. --calibrate writes the
+//              table the site shows to js/calibration.js.
 
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
@@ -163,6 +168,21 @@ async function loadFutures(history) {
   await writeFile(CACHE, JSON.stringify(history));
 }
 
+// Archived EIA outlook editions (scripts/data/build-steo-vintages.py), each
+// usable from the 12th of its month — EIA publishes in the first half.
+const STEO = JSON.parse(await readFile(resolve(root, 'scripts/data/steo-vintages.json'), 'utf8'));
+const STEO_EDITIONS = Object.keys(STEO).sort();
+const OUTLOOK_SERIES = { NUS: 'MGRARUS', R10: 'MGRARP1', R20: 'MGRARP2', R30: 'MGRARP3', R40: 'MGRARP4', R50: 'MGRARP5' };
+function outlookOn(day, area, grade) {
+  let ed = null;
+  for (const k of STEO_EDITIONS) if (`${k}-12` <= day) ed = k;
+  if (!ed) return null;
+  const e = STEO[ed];
+  const sid = GRADES[grade].outlook === 'diesel' ? 'DSRTUUS' : OUTLOOK_SERIES[AREAS[area].padd] || 'MGRARUS';
+  const [y, m] = e.start.split('-').map(Number);
+  return e[sid].map((price, k) => ({ month: new Date(Date.UTC(y, m - 1 + k, 1)).toISOString().slice(0, 7), price }));
+}
+
 // ---- Walk-forward -----------------------------------------------------------
 
 const WARMUP = 26;       // reports before the first evaluation
@@ -198,13 +218,13 @@ const isoDay = ms => new Date(ms).toISOString().slice(0, 10);
 
 // Every calendar day: the verdict a visitor would have seen that day, scored
 // against interpolated actual prices that day and a week later.
-function dailyWalk(history, grade, withFutures, from = '0000') {
+function dailyWalk(history, grade, { futures: withFutures = true, outlook: withOutlook = true, from = '0000' } = {}) {
   const lead = GRADES[grade].lead;
   const spotAll = history.spot[lead] || [];
   const fut = (history.futures && history.futures[lead]) || [];
   const rows = [];
   let flips = 0, pairs = 0;
-  for (const series of Object.values(history.grades[grade])) {
+  for (const [area, series] of Object.entries(history.grades[grade])) {
     const ms = series.map(p => parseDate(p.date));
     const truth = t => {
       const i = ms.findIndex(m => m >= t);
@@ -225,12 +245,13 @@ function dailyWalk(history, grade, withFutures, from = '0000') {
         while (fi < fut.length && fut[fi].date <= yesterday) fi++;
         spot = splice(spot, fut.slice(Math.max(0, fi - 15), fi));
       }
-      const r = analyze({ series: series.slice(Math.max(0, ri - 40), ri), wholesale: { spot }, now: D, prevVerdict: prevKey });
+      const outlook = withOutlook ? outlookOn(isoDay(D), area, grade) : null;
+      const r = analyze({ series: series.slice(Math.max(0, ri - 40), ri), wholesale: { spot }, outlook, now: D, prevVerdict: prevKey });
       const wait = r.verdict.key === 'wait';
       if (prev !== null) { pairs++; if (prev !== wait) flips++; }
       prev = wait;
       prevKey = r.verdict.key;
-      rows.push({ wait, t0: truth(D), t7: truth(D + 7 * DAY), est: r.today, last: series[ri - 1].price });
+      rows.push({ day: isoDay(D), wait, change14: r.change14, t0: truth(D), t7: truth(D + 7 * DAY), est: r.today, last: series[ri - 1].price });
     }
   }
   const now = mean(rows.map(r => r.t0));
@@ -243,8 +264,25 @@ function dailyWalk(history, grade, withFutures, from = '0000') {
     todayMae: mean(rows.map(r => Math.abs(r.est - r.t0))),
     todayNaive: mean(rows.map(r => Math.abs(r.last - r.t0))),
     flipsPerMonth: 30 * flips / (pairs || 1),
+    rows,
   };
 }
+
+// Odds by forecast size: how often the price was lower a week later, and the
+// average 7-day move, in bins of the predicted 14-day change. `xMean` is where
+// each bin's rows actually sit, so the site can interpolate between bins.
+const ODDS_EDGES = [-Infinity, -0.06, -0.04, -0.02, -0.01, 0, 0.01, 0.02, 0.04, 0.06, Infinity];
+function oddsTable(rows) {
+  const bins = ODDS_EDGES.slice(0, -1).map(() => []);
+  for (const r of rows) bins[ODDS_EDGES.findIndex((e, k) => r.change14 >= e && r.change14 < ODDS_EDGES[k + 1])].push(r);
+  return bins.filter(b => b.length).map(b => ({
+    xMean: mean(b.map(r => r.change14)),
+    pLower: mean(b.map(r => (r.t7 < r.t0 ? 1 : 0))),
+    move7: mean(b.map(r => r.t7 - r.t0)),
+    n: b.length,
+  }));
+}
+const nearestBin = (table, x) => table.reduce((best, b) => (Math.abs(b.xMean - x) < Math.abs(best.xMean - x) ? b : best));
 
 // ---- Metrics ----------------------------------------------------------------
 
@@ -363,22 +401,59 @@ for (const grade of GRADE_IDS) {
     }
   }
   const daily = [];
+  let odds = null;
   if (history.futures) {
     console.log(`\n== ${name} daily verdict (every calendar day) ==`);
     const since = `${DAILY_HOLDOUT.slice(0, 4)}+`;
-    const h = DEFAULTS.verdictHysteresis;
-    for (const [label, withFutures, from, hyst] of [
-      ['EIA spot only', false, '0000', 0], ['+ futures fill', true, '0000', 0], ['+ hysteresis (current)', true, '0000', h],
-      [`EIA spot only, ${since}`, false, DAILY_HOLDOUT, 0], [`+ futures fill, ${since}`, true, DAILY_HOLDOUT, 0],
-      [`+ hysteresis (current), ${since}`, true, DAILY_HOLDOUT, h],
-    ]) {
-      const m = withModel({ verdictHysteresis: hyst }, () => dailyWalk(history, grade, withFutures, from));
-      daily.push({ label, ...m });
-      console.log(`${label.padEnd(36)} saved ${c(m.saved)}¢ (${pct(m.captured)} of oracle)  right ${pct(m.right)}  wait ${pct(m.waitShare)}  `
-        + `today MAE ${c(m.todayMae)}¢ vs last report ${c(m.todayNaive)}¢  flips ${m.flipsPerMonth.toFixed(1)}/mo`);
+    const VARIANTS = [
+      ['EIA spot only', { futures: false, outlook: false }, { verdictHysteresis: 0 }],
+      ['+ futures fill', { outlook: false }, { verdictHysteresis: 0 }],
+      ['+ hysteresis', { outlook: false }, {}],
+      ['+ outlook from day 7 (previous)', {}, { anchorStartDay: 7, anchorFullDay: 30 }],
+      ['+ outlook from day 21 (current)', {}, {}],
+    ];
+    const current = {};
+    for (const [from, suffix] of [['0000', ''], [DAILY_HOLDOUT, `, ${since}`]]) {
+      for (const [label, opts, overrides] of VARIANTS) {
+        const m = withModel(overrides, () => dailyWalk(history, grade, { ...opts, from }));
+        if (!Object.keys(overrides).length && opts.outlook !== false) current[from] = m;
+        daily.push({ label: label + suffix, ...m, rows: undefined });
+        console.log(`${(label + suffix).padEnd(40)} saved ${c(m.saved)}¢ (${pct(m.captured)} of oracle)  right ${pct(m.right)}  wait ${pct(m.waitShare)}  `
+          + `today MAE ${c(m.todayMae)}¢ vs last report ${c(m.todayNaive)}¢  flips ${m.flipsPerMonth.toFixed(1)}/mo`);
+      }
     }
+    // Odds: the shipped table uses every year; the check builds one from the
+    // years before the holdout and scores it on the holdout (Brier score, lower
+    // is better) against always predicting the holdout's own base rate.
+    const all = current['0000'].rows;
+    const train = all.filter(r => r.day < DAILY_HOLDOUT), test = current[DAILY_HOLDOUT].rows;
+    const lower = r => (r.t7 < r.t0 ? 1 : 0);
+    const trainTable = oddsTable(train);
+    const base = mean(test.map(lower));
+    odds = {
+      table: oddsTable(all), train: trainTable, test: oddsTable(test),
+      brier: mean(test.map(r => (nearestBin(trainTable, r.change14).pLower - lower(r)) ** 2)),
+      brierBase: mean(test.map(r => (base - lower(r)) ** 2)),
+    };
+    console.log(`Odds: holdout Brier ${odds.brier.toFixed(4)} with a pre-${DAILY_HOLDOUT.slice(0, 4)} table vs ${odds.brierBase.toFixed(4)} for the base rate`);
   }
-  results[grade] = { base, noWholesale, perArea, sweep, daily };
+  results[grade] = { base, noWholesale, perArea, sweep, daily, odds };
+}
+
+if (flag('calibrate')) {
+  const tables = Object.fromEntries(Object.entries(results).filter(([, r]) => r.odds)
+    .map(([g, r]) => [g, r.odds.table.map(b => ({ x: +b.xMean.toFixed(4), p: +b.pLower.toFixed(3), move: +b.move7.toFixed(4) }))]));
+  const out = resolve(root, 'js/calibration.js');
+  await writeFile(out, [
+    '// Generated by `node scripts/backtest.mjs --calibrate` — do not edit by hand.',
+    `// Daily backtest, ${YEARS} years to ${new Date().toISOString().slice(0, 10)}. For a predicted 14-day change of x`,
+    '// ($/gal), p = share of days the price was lower a week later, move = the',
+    '// average actual 7-day change ($/gal). See docs/BACKTEST.md ("Odds").',
+    'export const ODDS = {',
+    ...Object.entries(tables).flatMap(([g, rows]) => [`  ${g}: [`, ...rows.map(r => `    ${JSON.stringify(r)},`), '  ],']),
+    '};', '',
+  ].join('\n'));
+  console.log(`\nWrote ${out}`);
 }
 
 if (flag('report')) {
@@ -413,6 +488,7 @@ function renderReport(results) {
       'The weekly test above scores Mondays only, but the site re-runs every evening. This walks every calendar day with what the site would have had: '
       + 'retail reports published before that day, and EIA spot prices as EIA actually posts them — once a week on Wednesdays, through Tuesday, so 2–8 days old. '
       + '"+ futures fill" adds the days since EIA\'s latest posting from NYMEX futures (`scripts/providers/futures.mjs`; here continuous front-month history from Yahoo Finance). '
+      + '"+ outlook" adds the EIA monthly outlook edition that was out on each date (`scripts/data/steo-vintages.json`, usable from the 12th of its month). Blending toward it from day 7 made the decision worse, so the blend now starts at day 21, past the 2-week window the verdict and price tiles use. '
       + 'Actual prices between weekly reports are linearly interpolated. A driver must buy within a week and follows the verdict: buy now, or in 7 days on "wait". '
       + `The model constants were set before this test existed and no constant was tuned on ${DAILY_HOLDOUT.slice(0, 4)} onward, so those rows are out of sample.`, '',
       '| Grade | Variant | Saved vs always-now | Of oracle | Verdict right | Wait share | "Today" error / last report | Wait↔buy flips per month |',
@@ -421,6 +497,22 @@ function renderReport(results) {
       for (const d of r.daily) {
         lines.push(`| ${GRADES[g].name} | ${d.label} | ${c(d.saved)}¢ | ${pct(d.captured)} | ${pct(d.right)} | ${pct(d.waitShare)} | ${c(d.todayMae)}¢ / ${c(d.todayNaive)}¢ | ${d.flipsPerMonth.toFixed(1)} |`);
       }
+    }
+  }
+  if (Object.values(results).some(r => r.odds)) {
+    const yr = DAILY_HOLDOUT.slice(0, 4);
+    lines.push('', '## Odds', '',
+      `The site shows how often, historically, the price was lower a week later — and the average move — for forecasts like today's: the daily walk with the current model, bucketed by the predicted 14-day change. To check that this generalizes, a table built only from the years before ${yr} is scored on ${yr} onward (Brier score, lower is better; "base rate" always predicts the holdout's own share of lower weeks).`, '');
+    for (const [g, r] of Object.entries(results)) {
+      if (!r.odds) continue;
+      const o = r.odds;
+      lines.push(`**${GRADES[g].name}** — holdout Brier ${o.brier.toFixed(4)} vs ${o.brierBase.toFixed(4)} for the base rate.`, '',
+        `| Predicted 14-day change (bin avg) | Lower a week later | before ${yr} / ${yr}+ | Avg 7-day move | Days |`, '|---|---|---|---|---|');
+      for (const b of o.table) {
+        const tr = nearestBin(o.train, b.xMean), te = nearestBin(o.test, b.xMean);
+        lines.push(`| ${b.xMean >= 0 ? '+' : ''}${c(b.xMean)}¢ | ${pct(b.pLower)} | ${pct(tr.pLower)} / ${pct(te.pLower)} | ${b.move7 >= 0 ? '+' : ''}${c(b.move7)}¢ | ${b.n.toLocaleString()} |`);
+      }
+      lines.push('');
     }
   }
   for (const [g, r] of Object.entries(results)) {

@@ -22,34 +22,115 @@ Walk forward one weekly report at a time, giving the model only what existed on 
 
 ## Daily verdict
 
-The weekly test above scores Mondays only, but the site re-runs every evening. This walks every calendar day with what the site would have had: retail reports published before that day, and EIA spot prices as EIA actually posts them — once a week on Wednesdays, through Tuesday, so 2–8 days old. "+ futures fill" adds the days since EIA's latest posting from NYMEX futures (`scripts/providers/futures.mjs`; here continuous front-month history from Yahoo Finance). Actual prices between weekly reports are linearly interpolated. A driver must buy within a week and follows the verdict: buy now, or in 7 days on "wait". The model constants were set before this test existed and no constant was tuned on 2022 onward, so those rows are out of sample.
+The weekly test above scores Mondays only, but the site re-runs every evening. This walks every calendar day with what the site would have had: retail reports published before that day, and EIA spot prices as EIA actually posts them — once a week on Wednesdays, through Tuesday, so 2–8 days old. "+ futures fill" adds the days since EIA's latest posting from NYMEX futures (`scripts/providers/futures.mjs`; here continuous front-month history from Yahoo Finance). "+ outlook" adds the EIA monthly outlook edition that was out on each date (`scripts/data/steo-vintages.json`, usable from the 12th of its month). Blending toward it from day 7 made the decision worse, so the blend now starts at day 21, past the 2-week window the verdict and price tiles use. Actual prices between weekly reports are linearly interpolated. A driver must buy within a week and follows the verdict: buy now, or in 7 days on "wait". The model constants were set before this test existed and no constant was tuned on 2022 onward, so those rows are out of sample.
 
 | Grade | Variant | Saved vs always-now | Of oracle | Verdict right | Wait share | "Today" error / last report | Wait↔buy flips per month |
 |---|---|---|---|---|---|---|---|
 | Regular | EIA spot only | 0.90¢ | 40.0% | 66.0% | 37.5% | 2.78¢ / 3.16¢ | 1.6 |
 | Regular | + futures fill | 1.14¢ | 50.9% | 70.2% | 36.8% | 2.68¢ / 3.16¢ | 2.7 |
-| Regular | + hysteresis (current) | 1.14¢ | 50.5% | 70.3% | 37.1% | 2.68¢ / 3.16¢ | 1.9 |
+| Regular | + hysteresis | 1.14¢ | 50.5% | 70.3% | 37.1% | 2.68¢ / 3.16¢ | 1.9 |
+| Regular | + outlook from day 7 (previous) | 0.96¢ | 42.6% | 67.3% | 37.5% | 2.68¢ / 3.16¢ | 3.4 |
+| Regular | + outlook from day 21 (current) | 1.14¢ | 50.5% | 70.3% | 37.1% | 2.68¢ / 3.16¢ | 1.9 |
 | Regular | EIA spot only, 2022+ | 1.14¢ | 36.6% | 64.4% | 40.5% | 3.81¢ / 4.32¢ | 1.6 |
 | Regular | + futures fill, 2022+ | 1.46¢ | 46.9% | 67.7% | 40.7% | 3.66¢ / 4.32¢ | 3.0 |
-| Regular | + hysteresis (current), 2022+ | 1.44¢ | 46.2% | 67.8% | 40.9% | 3.66¢ / 4.32¢ | 2.2 |
+| Regular | + hysteresis, 2022+ | 1.44¢ | 46.2% | 67.8% | 40.9% | 3.66¢ / 4.32¢ | 2.2 |
+| Regular | + outlook from day 7 (previous), 2022+ | 1.20¢ | 38.5% | 64.4% | 38.5% | 3.66¢ / 4.32¢ | 3.8 |
+| Regular | + outlook from day 21 (current), 2022+ | 1.44¢ | 46.2% | 67.8% | 40.9% | 3.66¢ / 4.32¢ | 2.2 |
 | Midgrade | EIA spot only | 0.85¢ | 39.7% | 65.8% | 37.3% | 2.73¢ / 3.05¢ | 1.6 |
 | Midgrade | + futures fill | 1.07¢ | 49.9% | 69.7% | 36.6% | 2.65¢ / 3.05¢ | 2.6 |
-| Midgrade | + hysteresis (current) | 1.06¢ | 49.5% | 69.8% | 36.9% | 2.65¢ / 3.05¢ | 1.9 |
+| Midgrade | + hysteresis | 1.06¢ | 49.5% | 69.8% | 36.9% | 2.65¢ / 3.05¢ | 1.9 |
+| Midgrade | + outlook from day 7 (previous) | 0.90¢ | 42.0% | 66.9% | 37.4% | 2.65¢ / 3.05¢ | 3.3 |
+| Midgrade | + outlook from day 21 (current) | 1.06¢ | 49.5% | 69.8% | 36.9% | 2.65¢ / 3.05¢ | 1.9 |
 | Midgrade | EIA spot only, 2022+ | 1.09¢ | 36.7% | 63.8% | 40.4% | 3.72¢ / 4.17¢ | 1.6 |
 | Midgrade | + futures fill, 2022+ | 1.38¢ | 46.5% | 67.3% | 40.6% | 3.59¢ / 4.17¢ | 3.0 |
-| Midgrade | + hysteresis (current), 2022+ | 1.35¢ | 45.6% | 67.4% | 40.8% | 3.59¢ / 4.17¢ | 2.2 |
+| Midgrade | + hysteresis, 2022+ | 1.35¢ | 45.6% | 67.4% | 40.8% | 3.59¢ / 4.17¢ | 2.2 |
+| Midgrade | + outlook from day 7 (previous), 2022+ | 1.14¢ | 38.3% | 63.9% | 38.5% | 3.59¢ / 4.17¢ | 3.7 |
+| Midgrade | + outlook from day 21 (current), 2022+ | 1.35¢ | 45.6% | 67.4% | 40.8% | 3.59¢ / 4.17¢ | 2.2 |
 | Premium | EIA spot only | 0.84¢ | 39.9% | 66.1% | 37.3% | 2.68¢ / 3.03¢ | 1.6 |
 | Premium | + futures fill | 1.07¢ | 50.5% | 70.0% | 36.5% | 2.59¢ / 3.03¢ | 2.7 |
-| Premium | + hysteresis (current) | 1.06¢ | 50.1% | 70.2% | 36.8% | 2.59¢ / 3.03¢ | 1.9 |
+| Premium | + hysteresis | 1.06¢ | 50.1% | 70.2% | 36.8% | 2.59¢ / 3.03¢ | 1.9 |
+| Premium | + outlook from day 7 (previous) | 0.90¢ | 42.4% | 67.3% | 37.4% | 2.59¢ / 3.03¢ | 3.3 |
+| Premium | + outlook from day 21 (current) | 1.06¢ | 50.1% | 70.2% | 36.8% | 2.59¢ / 3.03¢ | 1.9 |
 | Premium | EIA spot only, 2022+ | 1.08¢ | 36.8% | 64.0% | 40.3% | 3.67¢ / 4.15¢ | 1.6 |
 | Premium | + futures fill, 2022+ | 1.38¢ | 46.9% | 67.5% | 40.5% | 3.54¢ / 4.15¢ | 3.0 |
-| Premium | + hysteresis (current), 2022+ | 1.35¢ | 46.0% | 67.7% | 40.7% | 3.54¢ / 4.15¢ | 2.2 |
+| Premium | + hysteresis, 2022+ | 1.35¢ | 46.0% | 67.7% | 40.7% | 3.54¢ / 4.15¢ | 2.2 |
+| Premium | + outlook from day 7 (previous), 2022+ | 1.13¢ | 38.6% | 64.3% | 38.5% | 3.54¢ / 4.15¢ | 3.8 |
+| Premium | + outlook from day 21 (current), 2022+ | 1.35¢ | 46.0% | 67.7% | 40.7% | 3.54¢ / 4.15¢ | 2.2 |
 | Diesel | EIA spot only | 0.86¢ | 47.6% | 68.5% | 36.4% | 2.22¢ / 2.70¢ | 1.5 |
 | Diesel | + futures fill | 1.15¢ | 63.3% | 72.2% | 35.1% | 2.12¢ / 2.70¢ | 2.4 |
-| Diesel | + hysteresis (current) | 1.15¢ | 63.7% | 72.2% | 35.0% | 2.12¢ / 2.70¢ | 1.7 |
+| Diesel | + hysteresis | 1.15¢ | 63.7% | 72.2% | 35.0% | 2.12¢ / 2.70¢ | 1.7 |
+| Diesel | + outlook from day 7 (previous) | 0.79¢ | 43.8% | 66.9% | 30.9% | 2.12¢ / 2.70¢ | 3.0 |
+| Diesel | + outlook from day 21 (current) | 1.15¢ | 63.7% | 72.2% | 35.0% | 2.12¢ / 2.70¢ | 1.7 |
 | Diesel | EIA spot only, 2022+ | 1.28¢ | 43.9% | 66.1% | 45.7% | 3.47¢ / 4.30¢ | 1.7 |
 | Diesel | + futures fill, 2022+ | 1.82¢ | 62.3% | 70.8% | 43.4% | 3.30¢ / 4.30¢ | 2.5 |
-| Diesel | + hysteresis (current), 2022+ | 1.82¢ | 62.6% | 70.7% | 43.8% | 3.30¢ / 4.30¢ | 2.1 |
+| Diesel | + hysteresis, 2022+ | 1.82¢ | 62.6% | 70.7% | 43.8% | 3.30¢ / 4.30¢ | 2.1 |
+| Diesel | + outlook from day 7 (previous), 2022+ | 1.18¢ | 40.3% | 65.3% | 44.3% | 3.30¢ / 4.30¢ | 4.5 |
+| Diesel | + outlook from day 21 (current), 2022+ | 1.82¢ | 62.6% | 70.7% | 43.8% | 3.30¢ / 4.30¢ | 2.1 |
+
+## Odds
+
+The site shows how often, historically, the price was lower a week later — and the average move — for forecasts like today's: the daily walk with the current model, bucketed by the predicted 14-day change. To check that this generalizes, a table built only from the years before 2022 is scored on 2022 onward (Brier score, lower is better; "base rate" always predicts the holdout's own share of lower weeks).
+
+**Regular** — holdout Brier 0.2105 vs 0.2493 for the base rate.
+
+| Predicted 14-day change (bin avg) | Lower a week later | before 2022 / 2022+ | Avg 7-day move | Days |
+|---|---|---|---|---|
+| -12.66¢ | 83.5% | 89.0% / 79.7% | -4.39¢ | 22,810 |
+| -4.96¢ | 74.3% | 81.0% / 65.0% | -1.40¢ | 7,393 |
+| -2.98¢ | 70.3% | 73.6% / 65.7% | -1.20¢ | 8,602 |
+| -1.51¢ | 61.9% | 61.8% / 62.0% | -0.33¢ | 4,526 |
+| -0.49¢ | 56.3% | 56.1% / 56.5% | -0.07¢ | 4,503 |
+| +0.52¢ | 51.1% | 50.6% / 51.8% | +0.45¢ | 4,815 |
+| +1.50¢ | 44.8% | 42.6% / 48.3% | +1.09¢ | 5,228 |
+| +2.97¢ | 37.7% | 35.3% / 42.4% | +1.82¢ | 10,373 |
+| +4.99¢ | 29.9% | 27.6% / 33.7% | +2.20¢ | 9,245 |
+| +12.15¢ | 23.0% | 18.0% / 27.6% | +4.37¢ | 28,065 |
+
+**Midgrade** — holdout Brier 0.2115 vs 0.2495 for the base rate.
+
+| Predicted 14-day change (bin avg) | Lower a week later | before 2022 / 2022+ | Avg 7-day move | Days |
+|---|---|---|---|---|
+| -12.62¢ | 82.4% | 87.6% / 78.9% | -4.14¢ | 22,631 |
+| -4.96¢ | 72.2% | 77.3% / 65.1% | -1.31¢ | 7,447 |
+| -2.98¢ | 68.8% | 71.9% / 64.6% | -1.08¢ | 8,539 |
+| -1.50¢ | 61.7% | 61.4% / 62.1% | -0.26¢ | 4,579 |
+| -0.49¢ | 55.7% | 55.5% / 56.0% | -0.06¢ | 4,499 |
+| +0.52¢ | 50.7% | 50.1% / 51.6% | +0.45¢ | 4,818 |
+| +1.51¢ | 43.8% | 41.7% / 47.2% | +1.05¢ | 5,332 |
+| +2.97¢ | 37.7% | 34.8% / 43.3% | +1.76¢ | 10,379 |
+| +4.98¢ | 30.2% | 26.9% / 35.7% | +2.16¢ | 9,245 |
+| +12.11¢ | 23.1% | 18.3% / 27.5% | +4.27¢ | 28,091 |
+
+**Premium** — holdout Brier 0.2111 vs 0.2496 for the base rate.
+
+| Predicted 14-day change (bin avg) | Lower a week later | before 2022 / 2022+ | Avg 7-day move | Days |
+|---|---|---|---|---|
+| -12.60¢ | 82.7% | 88.0% / 79.1% | -4.17¢ | 22,599 |
+| -4.96¢ | 71.8% | 77.4% / 63.9% | -1.25¢ | 7,425 |
+| -2.99¢ | 69.1% | 72.5% / 64.6% | -1.08¢ | 8,538 |
+| -1.51¢ | 61.1% | 60.7% / 61.6% | -0.28¢ | 4,616 |
+| -0.48¢ | 56.1% | 55.0% / 57.7% | -0.05¢ | 4,493 |
+| +0.51¢ | 50.5% | 50.1% / 51.0% | +0.46¢ | 4,792 |
+| +1.51¢ | 43.4% | 41.2% / 46.7% | +1.15¢ | 5,367 |
+| +2.97¢ | 37.0% | 33.9% / 43.2% | +1.80¢ | 10,391 |
+| +4.98¢ | 29.6% | 26.4% / 34.9% | +2.16¢ | 9,209 |
+| +12.11¢ | 22.5% | 17.6% / 27.0% | +4.34¢ | 28,130 |
+
+**Diesel** — holdout Brier 0.1971 vs 0.2462 for the base rate.
+
+| Predicted 14-day change (bin avg) | Lower a week later | before 2022 / 2022+ | Avg 7-day move | Days |
+|---|---|---|---|---|
+| -12.81¢ | 88.2% | 95.2% / 84.7% | -4.59¢ | 8,621 |
+| -5.00¢ | 78.8% | 85.3% / 72.6% | -1.40¢ | 2,602 |
+| -2.99¢ | 72.1% | 72.5% / 71.5% | -0.95¢ | 2,828 |
+| -1.47¢ | 60.9% | 57.4% / 69.2% | -0.40¢ | 1,736 |
+| -0.47¢ | 53.8% | 50.3% / 61.1% | +0.73¢ | 2,248 |
+| +0.49¢ | 47.8% | 45.2% / 54.1% | +0.94¢ | 2,353 |
+| +1.50¢ | 39.7% | 36.0% / 48.2% | +1.07¢ | 2,065 |
+| +2.98¢ | 36.4% | 32.9% / 45.9% | +1.15¢ | 4,144 |
+| +4.96¢ | 29.3% | 22.8% / 44.7% | +1.55¢ | 3,388 |
+| +13.12¢ | 20.3% | 12.4% / 25.5% | +6.22¢ | 10,055 |
+
 
 ## Regular
 

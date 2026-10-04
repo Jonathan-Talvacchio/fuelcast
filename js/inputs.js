@@ -4,6 +4,7 @@
 
 import { GRADES } from './regions.js';
 import { parseDate } from './predict.js';
+import { ODDS } from './calibration.js';
 
 const DAY_MS = 86400000;
 const VERDICT_MAX_AGE_DAYS = 3;   // older saved verdicts are ignored
@@ -51,6 +52,8 @@ export function analysisInputs(data, areaId, g, now = Date.now()) {
       wholesale: { spot: data.wholesale[grade.lead], wti: data.wholesale.wti },
       now,
       prevVerdict: savedVerdict(data, found.areaId, g, now),
+      // Midgrade and premium follow regular's odds.
+      odds: ODDS[g] || ODDS[grade.outlook] || null,
     },
   };
 }

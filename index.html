@@ -34,6 +34,13 @@
         <span class="control-label" id="gradeLabel">Fuel</span>
         <div class="segmented" id="gradeSelect" role="radiogroup" aria-labelledby="gradeLabel"></div>
       </div>
+      <label class="control control-fill">
+        <span class="control-label">Fill-up size</span>
+        <span class="fill-input">
+          <input id="fillGallons" type="number" inputmode="numeric" min="1" max="40" step="1" value="12" aria-describedby="fillUnit">
+          <span id="fillUnit">gal</span>
+        </span>
+      </label>
       <p id="areaNote" class="note" hidden></p>
     </section>
 
@@ -46,6 +53,7 @@
           <h1 id="verdictLabel">—</h1>
           <p class="why">Because <span id="verdictWhy">—</span>.</p>
           <p id="reason" class="reason">—</p>
+          <p id="odds" class="odds" hidden></p>
           <p class="asof">Latest reported average: <strong id="lastReported">—</strong> on <span id="asOfDate">—</span><span id="stale"></span></p>
         </div>
       </section>
@@ -114,7 +122,8 @@
       <section class="card how">
         <h2>How this works</h2>
         <p>Every day we pull the latest <strong>weekly average retail prices</strong> for gasoline and diesel from the U.S. Energy Information Administration (EIA) for your metro, state, or region, along with EIA's daily wholesale gasoline and diesel prices (EIA posts these weekly, so we fill in the days since from NYMEX futures), crude oil, and its official monthly price outlook.</p>
-        <p>The prediction is a simple, transparent estimate: recent momentum in your area's price, the direction wholesale gasoline has moved over the last couple of weeks (pump prices usually follow with a short lag), and — further out — EIA's monthly forecast for your region. The recommendation follows the predicted direction: if prices look set to rise, fill up now; if they look set to fall, wait if you can. When they look steady, we say fill up now only if today's price is near the low of the last 90 days in your area.</p>
+        <p>The prediction is a simple, transparent estimate: recent momentum in your area's price, the direction wholesale gasoline has moved over the last couple of weeks (pump prices usually follow with a short lag), and — beyond the next three weeks — EIA's monthly forecast for your region. The recommendation follows the predicted direction: if prices look set to rise, fill up now; if they look set to fall, wait if you can. When they look steady, we say fill up now only if today's price is near the low of the last 90 days in your area. To keep the advice from flip-flopping, it only changes once the forecast moves clearly past the line.</p>
+        <p>The odds under the recommendation come from replaying ten years of history day by day: for forecasts like today's, how often the price was actually lower a week later, and how much waiting saved or cost on average. Set your fill-up size to see that in dollars. It's an average — any single week can go either way.</p>
         <p class="tip"><strong>Tip:</strong> station prices often creep up ahead of the weekend; early-week fill-ups tend to be a little cheaper. Shop around too — the spread between the cheapest and priciest station in town is usually bigger than any day-to-day move. Midgrade and premium move with regular almost cent for cent, so the same advice applies; their estimated prices sit under Today.</p>
       </section>
     </div>

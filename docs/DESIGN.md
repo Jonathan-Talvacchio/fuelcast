@@ -83,7 +83,7 @@ There are two moving parts and nothing else:
 | Data | Route | Series | Cadence | Use |
 |---|---|---|---|---|
 | Retail prices, $/gal | `petroleum/pri/gnd` | products `EPMR` regular, `EPMM` midgrade, `EPMP` premium (29 areas each), `EPD2D` diesel (11 areas: U.S., regions, California) | Weekly (Mondays) | Price history, "today", 90-day range |
-| Regular gasoline retail outlook, ¢/gal | `steo` | `MGRARUS`, `MGRARP1`–`MGRARP5` | Monthly, ~15 months ahead | Anchor for the 1–4 week projection (all gasoline grades); "official outlook" panel |
+| Regular gasoline retail outlook, ¢/gal | `steo` | `MGRARUS`, `MGRARP1`–`MGRARP5` | Monthly, ~15 months ahead | Anchor for the projection beyond 3 weeks (all gasoline grades); "official outlook" panel |
 | Diesel retail outlook, ¢/gal | `steo` | `DSRTUUS` (U.S. only) | Monthly | Anchor for diesel, offset to the area |
 | NY Harbor RBOB gasoline spot, $/gal | `petroleum/pri/spt` | `EER_EPMRU_PF4_Y35NY_DPG` | Daily | Leading indicator for gasoline pump prices |
 | NY Harbor ULSD diesel spot, $/gal | `petroleum/pri/spt` | `EER_EPD2DXL0_PF4_Y35NY_DPG` | Daily | Leading indicator for diesel pump prices |
@@ -196,9 +196,15 @@ published early in the month can sit well above or below this week's pump price)
 `A(d) = P₀ + O(asOf + d) − O(asOf)`.
 
 **Projection.** `raw(d) = P₀ + mom(d) + lead(d)`, then blended toward the anchor with
-weight `w(d) = clamp((d − 7) / 23, 0, 1)`:
-`price(d) = (1 − w)·raw(d) + w·A(d)`. So days 0–7 are pure momentum + wholesale;
-by day 30 the projection follows EIA's outlook shape.
+weight `w(d) = clamp((d − 21) / 24, 0, 1)`:
+`price(d) = (1 − w)·raw(d) + w·A(d)`. So the first three weeks — everything the
+verdict, the odds and the price tiles use — are pure momentum + wholesale; the
+outlook only shapes the 30-day direction in the summary. It used to start at day 7;
+tested against the outlook editions actually published at the time
+(`scripts/data/steo-vintages.json`), that made the daily buy/wait call worse (2022+:
+gas 67.8% → 64.4% right, diesel 70.7% → 65.3%) even though it slightly improved the
+1-week price forecast. Monthly averages smooth over the week-to-week turns the
+verdict is trying to catch.
 
 **Uncertainty band.** `σ` = standard deviation of the last 12 report-to-report
 changes (floor $0.02); `band(d) = ±σ·(d / stepDays)`. The band grows linearly with
@@ -242,8 +248,8 @@ All constants live in one `MODEL` object so they can be tuned in one place.
 
 `scripts/backtest.mjs` walks forward through 10 years of EIA history, separately
 for each fuel grade with that grade's wholesale lead, using only the data that
-existed on each date; the outlook anchor is disabled because past forecast
-vintages are unavailable. The **Backtest model** workflow reruns it with the real
+existed on each date. The weekly test leaves the outlook anchor out; the daily test
+below uses the outlook edition that was published on each date. The **Backtest model** workflow reruns it with the real
 API key and commits [`docs/BACKTEST.md`](BACKTEST.md). Results with the current
 (shared) constants:
 
@@ -279,14 +285,27 @@ on gas. Retuning `passThrough` / `leadLookbackDays`, a pump-vs-wholesale margin
 reversion term, a 7-day verdict horizon and regional wholesale hubs (Gulf Coast, Los
 Angeles) were also tried on the daily test and did not improve the decision.
 
+**Odds.** The verdict card also says how often, historically, the price was lower a
+week after forecasts like today's, and the average move — in money for the user's
+fill-up size. `backtest.mjs --calibrate` builds the table (`js/calibration.js`) from
+the daily walk, bucketing days by the predicted 14-day change; `oddsFor()`
+interpolates it. A table built only from 2016–2021 scores a Brier of 0.21 on 2022
+onward against 0.25 for always guessing the base rate, so the odds carry real
+information. The extremes are less certain than the history before 2022 suggested
+(a −6¢-or-more forecast was right 89% of the time then, 80% since), which is why the
+shipped table uses all years and the page rounds to the nearest 5%. The average move
+is small — about 1–4¢/gal in the strongest buckets — and the page says so in
+dollars rather than letting the verdict imply more.
+
 ## 8. User interface
 
 Single page, mobile-first, no framework. Reading order matches decision order:
 
-1. **Area and fuel controls** — dropdown + "Use my location" + Gas/Diesel toggle, with a note when a regional fallback is used.
+1. **Area and fuel controls** — dropdown + "Use my location" + Gas/Diesel toggle, with a note when a regional fallback is used, and a fill-up size in gallons (default 12, remembered in the browser).
 2. **Verdict card** — the recommendation, a one-line "because…", the plain-English
-   summary (position vs. 90-day range + predicted move), and the last reported price
-   and date. The card's left rule and headline take the verdict color.
+   summary (position vs. 90-day range + predicted move), the odds (how often prices
+   were lower a week later after similar forecasts, and what waiting a week saved or
+   cost on average for the user's fill-up), and the last reported price and date. The card's left rule and headline take the verdict color.
 3. **Price strip** — Today (est.) · Tomorrow · This week avg · Next week avg, each
    with a rounded-cents delta so the numbers and deltas never contradict.
 4. **Trend chart** — 13 weeks reported (solid, points) + 14 days predicted (dashed)
@@ -341,7 +360,5 @@ Breakpoints at 760px (single column, 2×2 price tiles, shorter chart) and 400px
    commercial feeds (station-level). With daily data the "today" estimate becomes an
    observation.
 2. **Custom domain** — DNS A/CNAME records to GitHub Pages; no code change.
-3. **Backtesting the outlook anchor** — needs archived STEO vintages (EIA publishes
-   them as monthly files, not through the API); would let the full model be tested.
-4. **Model refinements** — day-of-week seasonality if a daily source is added;
+3. **Model refinements** — day-of-week seasonality if a daily source is added;
    regional pass-through factors; a hurricane-season prior for Gulf Coast areas.

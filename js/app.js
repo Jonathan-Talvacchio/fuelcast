@@ -6,6 +6,8 @@ import { renderChart, fillTable } from './chart.js';
 const DATA_URL = 'data/prices.json';
 const STORAGE_KEY = 'fuelcast.selection';
 const GRADE_KEY = 'fuelcast.grade';
+const FILL_KEY = 'fuelcast.fillGallons';
+const DEFAULT_FILL = 12;
 const STALE_DAYS = 10;
 const DAY_MS = 86400000;
 
@@ -23,6 +25,15 @@ const fmtMonth = s => new Date(parseDate(s)).toLocaleDateString(undefined, { mon
 
 let data = null;
 let grade = 'regular';
+let fillGallons = DEFAULT_FILL;
+
+function initialFill() {
+  try {
+    const n = Number(localStorage.getItem(FILL_KEY));
+    if (n >= 1 && n <= 40) return Math.round(n);
+  } catch { /* storage unavailable */ }
+  return DEFAULT_FILL;
+}
 
 // ---- Selection: "area:ID" or "state:CODE" ----------------------------------
 
@@ -142,6 +153,20 @@ function delta(el, value, base, suffix) {
   el.textContent = dir === 'flat' ? `about the same ${suffix}` : `${dir === 'up' ? '▲' : '▼'} ${cents(d)} ${suffix}`;
 }
 
+// The verdict in money: how often the price was lower a week after forecasts
+// like today's, and what waiting a week was worth on the user's fill-up.
+function oddsText(r) {
+  const o = r.odds;
+  if (!o) return '';
+  const pct = Math.round(o.pLower * 20) * 5;   // nearest 5%: the history doesn't support more precision
+  const perFill = Math.abs(o.move7) * fillGallons;
+  const fill = `your ${fillGallons}-gallon fill-up`;
+  const odds = `After forecasts like this, prices were lower a week later <strong>${pct}%</strong> of the time.`;
+  if (perFill < 0.05) return `${odds} Either way, waiting a week made less than 5¢ of difference on ${fill}.`;
+  const what = o.move7 < 0 ? 'saved' : 'cost';
+  return `${odds} Waiting a week ${what} ${cents(o.move7)}/gal on average — <strong>about ${money(perFill)}</strong> on ${fill}.`;
+}
+
 function reasonText(r, areaLabel) {
   const pos = r.range.pos;
   const where = pos <= 0.2 ? 'near their 90-day low'
@@ -237,6 +262,8 @@ function render(selectionValue) {
   $('verdictLabel').textContent = r.verdict.label;
   $('verdictWhy').textContent = r.verdict.why;
   $('reason').textContent = reasonText(r, label);
+  $('odds').innerHTML = oddsText(r);
+  $('odds').hidden = !r.odds;
   $('lastReported').textContent = `$${r.lastReported.toFixed(3)}`;
   $('asOfDate').textContent = fmtDate(r.asOf);
   $('stale').innerHTML = r.daysSinceReport > 14
@@ -306,6 +333,15 @@ async function main() {
   sel.value = initialSelection();
   sel.addEventListener('change', () => { persist(sel.value); setStatus(''); render(sel.value); });
   $('locateBtn').addEventListener('click', locate);
+  fillGallons = initialFill();
+  $('fillGallons').value = fillGallons;
+  $('fillGallons').addEventListener('input', e => {
+    const n = Math.round(Number(e.target.value));
+    if (!(n >= 1 && n <= 40)) return;   // ignore partial or out-of-range input
+    fillGallons = n;
+    try { localStorage.setItem(FILL_KEY, String(n)); } catch { /* ignore */ }
+    if (data) render(sel.value);
+  });
   window.addEventListener('hashchange', () => {
     const h = parseHash();
     const g = h.grade || 'regular';

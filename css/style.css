@@ -102,6 +102,13 @@ select { width: 100%; }
 .btn:hover { border-color: var(--accent); }
 .btn:disabled { opacity: .6; cursor: progress; }
 .control-grade { flex: 0 1 auto; }
+.control-fill { flex: 0 1 auto; }
+.fill-input { display: inline-flex; align-items: center; gap: .4rem; color: var(--text-2); }
+.fill-input input {
+  font: inherit; width: 5.5rem; min-height: 44px; padding: .6rem .7rem;
+  border-radius: 10px; border: 1px solid var(--border); background: var(--surface-2); color: var(--text);
+}
+.fill-input input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .segmented { display: inline-flex; background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px; padding: 3px; gap: 2px; min-height: 44px; }
 .segmented button {
   font: inherit; font-weight: 600; font-size: .9rem; border: 0; background: transparent; color: var(--text-2);
@@ -127,6 +134,8 @@ select { width: 100%; }
 .verdict h1 { font-size: clamp(1.6rem, 4vw, 2.2rem); color: var(--verdict); }
 .why { margin: -.25rem 0 .5rem; font-weight: 600; color: var(--verdict); }
 .reason { font-size: 1.05rem; color: var(--text-2); }
+.odds { margin: -.25rem 0 .75rem; color: var(--text-2); }
+.odds strong { color: var(--text); }
 .asof { margin: 0; font-size: .85rem; color: var(--muted); }
 .stale-flag { color: var(--bad); font-weight: 600; }
 

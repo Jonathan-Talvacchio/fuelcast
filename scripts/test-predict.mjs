@@ -1,7 +1,7 @@
 // Run with: node --test scripts/
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { analyze, momentumSlope, wholesaleLead, outlookAt, verdictFor, MODEL } from '../js/predict.js';
+import { analyze, momentumSlope, wholesaleLead, outlookAt, verdictFor, oddsFor, MODEL } from '../js/predict.js';
 import { areaForCoords, STATES, AREAS } from '../js/regions.js';
 
 const DAY = 86400000;
@@ -101,8 +101,9 @@ test('analyze: outlook anchor pulls the 30-day projection toward the forecast', 
   ];
   const r = analyze({ series, outlook, now });
   const d30 = r.projection[r.projectionFromDay + 30].price;
-  assert.ok(d30 > 3.2, `anchored price ${d30}`);
-  assert.equal(r.projection[7].price, 3.0); // no anchor influence before anchorStartDay
+  assert.ok(d30 > 3.1, `anchored price ${d30}`);
+  // No anchor influence inside the 2-week window the verdict and tiles use.
+  assert.equal(r.projection[r.projectionFromDay + 14].price, 3.0);
   assert.equal(r.drivers.outlook.length, 3);
   assert.equal(r.drivers.outlook[0].month, '2026-09');
 });
@@ -235,4 +236,26 @@ test('saved verdicts feed the next analysis only while recent', async () => {
   assert.equal(d.found.areaId, 'R20');
   assert.equal(d.args.prevVerdict, 'now');
   assert.equal(analysisInputs({ ...data, verdicts: undefined }, 'SOH', 'regular', now).args.prevVerdict, null);
+});
+
+test('odds interpolate the calibration table and clamp at its ends', () => {
+  const table = [{ x: -0.05, p: 0.8, move: -0.02 }, { x: 0, p: 0.5, move: 0 }, { x: 0.05, p: 0.3, move: 0.02 }];
+  assert.deepEqual(oddsFor(-0.025, table), { pLower: 0.65, move7: -0.01 });
+  assert.deepEqual(oddsFor(-0.2, table), { pLower: 0.8, move7: -0.02 });
+  assert.deepEqual(oddsFor(0.2, table), { pLower: 0.3, move7: 0.02 });
+  assert.equal(oddsFor(0, []), null);
+  assert.equal(oddsFor(NaN, table), null);
+  const r = analyze({ series: weekly(20, () => 3.0), now, odds: table });
+  assert.ok(r.odds && Math.abs(r.odds.pLower - 0.5) < 0.01);
+  assert.equal(analyze({ series: weekly(20, () => 3.0), now }).odds, null);
+});
+
+test('shipped odds tables are well formed', async () => {
+  const { ODDS } = await import('../js/calibration.js');
+  for (const g of ['regular', 'diesel']) {
+    const t = ODDS[g];
+    assert.ok(t && t.length >= 5, `${g} table`);
+    for (let i = 1; i < t.length; i++) assert.ok(t[i].x > t[i - 1].x, `${g} sorted`);
+    for (const b of t) assert.ok(b.p > 0 && b.p < 1 && Math.abs(b.move) < 0.5, `${g} ${JSON.stringify(b)}`);
+  }
 });
