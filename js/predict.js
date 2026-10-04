@@ -26,6 +26,7 @@ export const MODEL = {
   rangeDays: 90,            // trailing window for the low / average / high comparison
   goodPricePos: 0.2,        // today within the bottom fifth of that range counts as a good price
   verdictMove: 0.02,        // $/gal predicted 14-day move that makes timing advice directional
+  verdictHysteresis: 0.01,  // $/gal the move must clear the wait line by to change yesterday's wait/buy call
   horizonDays: 30,
 };
 
@@ -145,10 +146,13 @@ function volatility(series) {
 
 // Timing advice follows the predicted direction; when prices look steady, where
 // today sits in the trailing range (0 = 90-day low, 1 = 90-day high) decides
-// whether it's worth filling up now.
-export function verdictFor(change14, rangePos = 0.5) {
+// whether it's worth filling up now. Given yesterday's call (`prev`), the wait
+// line moves by verdictHysteresis in its favour, so a forecast hovering near the
+// line doesn't flip the advice back and forth from one day to the next.
+export function verdictFor(change14, rangePos = 0.5, prev = null) {
+  const h = prev === 'wait' ? MODEL.verdictHysteresis : prev ? -MODEL.verdictHysteresis : 0;
   if (change14 >= MODEL.verdictMove) return { ...VERDICTS.now, why: 'prices are headed up' };
-  if (change14 <= -MODEL.verdictMove) return { ...VERDICTS.wait, why: 'prices are headed down' };
+  if (change14 <= -MODEL.verdictMove + h) return { ...VERDICTS.wait, why: 'prices are headed down' };
   if (rangePos <= MODEL.goodPricePos) return { ...VERDICTS.now, why: 'this is a good price that is not expected to get better' };
   return { ...VERDICTS.ok, why: 'prices look steady' };
 }
@@ -161,8 +165,9 @@ export function verdictFor(change14, rangePos = 0.5) {
  * @param {{spot?:{date:string,price:number}[], rbob?:{date:string,price:number}[], wti?:{date:string,price:number}[]}} [p.wholesale]
  *        `spot` is the wholesale series that leads this fuel's pump price (RBOB for gasoline, ULSD for diesel); `rbob` is accepted as a fallback
  * @param {number} [p.now]  ms timestamp for "today" (defaults to Date.now())
+ * @param {string|null} [p.prevVerdict]  the previous day's verdict key, for hysteresis
  */
-export function analyze({ series, outlook, regionSeries, wholesale, now = Date.now() }) {
+export function analyze({ series, outlook, regionSeries, wholesale, now = Date.now(), prevVerdict = null }) {
   if (!series || !series.length) throw new Error('No price history for this area');
   const pts = [...series].sort((a, b) => parseDate(a.date) - parseDate(b.date));
   const latest = pts[pts.length - 1];
@@ -221,7 +226,7 @@ export function analyze({ series, outlook, regionSeries, wholesale, now = Date.n
   const lo = Math.min(...window, latest.price);
   const hi = Math.max(...window, latest.price);
   const rangePos = hi > lo ? clamp((today - lo) / (hi - lo), 0, 1) : 0.5;
-  const verdict = verdictFor(change14, rangePos);
+  const verdict = verdictFor(change14, rangePos, prevVerdict);
 
   // Wholesale context for the "what's driving prices" panel.
   const change = (arr, n) => {

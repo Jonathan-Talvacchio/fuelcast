@@ -71,6 +71,7 @@ css/style.css           styles (light + dark)
 js/app.js               UI wiring, area selection, geolocation
 js/regions.js           area catalog, state → area map, centroids
 js/predict.js           prediction model + verdict (pure, tested)
+js/inputs.js            picks model inputs from the data file (shared with the data job)
 js/chart.js             trend chart
 data/prices.json        generated data (committed by the Actions job)
 scripts/fetch-data.mjs  fetches from the provider, validates, writes data/prices.json

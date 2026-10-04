@@ -211,7 +211,7 @@ function dailyWalk(history, grade, withFutures, from = '0000') {
       if (i <= 0) return series[Math.max(i, 0)].price;
       return series[i - 1].price + (t - ms[i - 1]) / (ms[i] - ms[i - 1]) * (series[i].price - series[i - 1].price);
     };
-    let ri = 0, si = 0, fi = 0, prev = null;
+    let ri = 0, si = 0, fi = 0, prev = null, prevKey = null;
     for (let D = ms[WARMUP] + DAY; D + 7 * DAY <= ms[ms.length - 1]; D += DAY) {
       if (isoDay(D) < from) continue;
       while (ri < series.length && ms[ri] < D) ri++;           // reports published before today
@@ -225,10 +225,11 @@ function dailyWalk(history, grade, withFutures, from = '0000') {
         while (fi < fut.length && fut[fi].date <= yesterday) fi++;
         spot = splice(spot, fut.slice(Math.max(0, fi - 15), fi));
       }
-      const r = analyze({ series: series.slice(Math.max(0, ri - 40), ri), wholesale: { spot }, now: D });
+      const r = analyze({ series: series.slice(Math.max(0, ri - 40), ri), wholesale: { spot }, now: D, prevVerdict: prevKey });
       const wait = r.verdict.key === 'wait';
       if (prev !== null) { pairs++; if (prev !== wait) flips++; }
       prev = wait;
+      prevKey = r.verdict.key;
       rows.push({ wait, t0: truth(D), t7: truth(D + 7 * DAY), est: r.today, last: series[ri - 1].price });
     }
   }
@@ -365,13 +366,15 @@ for (const grade of GRADE_IDS) {
   if (history.futures) {
     console.log(`\n== ${name} daily verdict (every calendar day) ==`);
     const since = `${DAILY_HOLDOUT.slice(0, 4)}+`;
-    for (const [label, withFutures, from] of [
-      ['EIA spot only', false, '0000'], ['+ futures fill', true, '0000'],
-      [`EIA spot only, ${since}`, false, DAILY_HOLDOUT], [`+ futures fill, ${since}`, true, DAILY_HOLDOUT],
+    const h = DEFAULTS.verdictHysteresis;
+    for (const [label, withFutures, from, hyst] of [
+      ['EIA spot only', false, '0000', 0], ['+ futures fill', true, '0000', 0], ['+ hysteresis (current)', true, '0000', h],
+      [`EIA spot only, ${since}`, false, DAILY_HOLDOUT, 0], [`+ futures fill, ${since}`, true, DAILY_HOLDOUT, 0],
+      [`+ hysteresis (current), ${since}`, true, DAILY_HOLDOUT, h],
     ]) {
-      const m = dailyWalk(history, grade, withFutures, from);
+      const m = withModel({ verdictHysteresis: hyst }, () => dailyWalk(history, grade, withFutures, from));
       daily.push({ label, ...m });
-      console.log(`${label.padEnd(26)} saved ${c(m.saved)}¢ (${pct(m.captured)} of oracle)  right ${pct(m.right)}  wait ${pct(m.waitShare)}  `
+      console.log(`${label.padEnd(36)} saved ${c(m.saved)}¢ (${pct(m.captured)} of oracle)  right ${pct(m.right)}  wait ${pct(m.waitShare)}  `
         + `today MAE ${c(m.todayMae)}¢ vs last report ${c(m.todayNaive)}¢  flips ${m.flipsPerMonth.toFixed(1)}/mo`);
     }
   }

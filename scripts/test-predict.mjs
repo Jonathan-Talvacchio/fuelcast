@@ -199,3 +199,40 @@ test('data providers load', async () => {
   const eia = await import('./providers/eia.mjs');
   assert.equal(typeof eia.fetchPrices, 'function');
 });
+
+test('verdict hysteresis: yesterday\'s wait/buy call holds near the line', () => {
+  // Without a previous call the line is at −verdictMove.
+  assert.equal(verdictFor(-0.019, 0.5).key, 'ok');
+  assert.equal(verdictFor(-0.021, 0.5).key, 'wait');
+  // After a wait, a forecast that eases back toward the line stays a wait…
+  assert.equal(verdictFor(-0.015, 0.5, 'wait').key, 'wait');
+  // …until it clears the line by the hysteresis margin.
+  assert.equal(verdictFor(-0.005, 0.5, 'wait').key, 'ok');
+  // After a buy/no-rush call, a forecast just past the line doesn't flip to wait…
+  assert.equal(verdictFor(-0.025, 0.5, 'ok').key, 'ok');
+  assert.equal(verdictFor(-0.025, 0.1, 'now').key, 'now');
+  // …until it clears the margin.
+  assert.equal(verdictFor(-0.035, 0.5, 'now').key, 'wait');
+  // Rising prices always mean buy now.
+  assert.equal(verdictFor(0.03, 0.9, 'wait').key, 'now');
+});
+
+test('saved verdicts feed the next analysis only while recent', async () => {
+  const { analysisInputs, savedVerdict } = await import('../js/inputs.js');
+  const series = weekly(20, () => 3.0);
+  const data = {
+    areas: { NUS: { padd: 'NUS', prices: { regular: { weekly: series } } },
+             SOH: { padd: 'R20', prices: { regular: { weekly: series } } },
+             R20: { padd: 'R20', prices: { regular: { weekly: series }, diesel: { weekly: series } } } },
+    outlook: {}, wholesale: { rbob: [], ulsd: [] },
+    verdicts: { date: iso(now), regular: { SOH: 'wait' }, diesel: { R20: 'now' } },
+  };
+  assert.equal(savedVerdict(data, 'SOH', 'regular', now), 'wait');
+  assert.equal(savedVerdict(data, 'SOH', 'regular', now + 4 * DAY), null);   // stale
+  assert.equal(analysisInputs(data, 'SOH', 'regular', now).args.prevVerdict, 'wait');
+  // Ohio has no diesel series: falls back to its region and that region's saved call.
+  const d = analysisInputs(data, 'SOH', 'diesel', now);
+  assert.equal(d.found.areaId, 'R20');
+  assert.equal(d.args.prevVerdict, 'now');
+  assert.equal(analysisInputs({ ...data, verdicts: undefined }, 'SOH', 'regular', now).args.prevVerdict, null);
+});

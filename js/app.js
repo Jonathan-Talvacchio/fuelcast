@@ -1,5 +1,6 @@
 import { AREAS, STATES, GRADES, FUEL_CHOICES, KIND_LABELS, areaForCoords } from './regions.js';
 import { analyze, parseDate } from './predict.js';
+import { pickSeries, analysisInputs } from './inputs.js';
 import { renderChart, fillTable } from './chart.js';
 
 const DATA_URL = 'data/prices.json';
@@ -126,25 +127,6 @@ function syncGradeSelect() {
   }
 }
 
-function pickSeries(area, g) {
-  const p = area && area.prices && area.prices[g];
-  if (!p) return null;
-  const s = p.daily && p.daily.length ? p.daily : p.weekly;
-  return s && s.length ? s : null;
-}
-
-// Find this grade's series for an area, falling back to its region (then the
-// U.S.) when the grade isn't reported there — EIA publishes diesel for regions
-// and California only.
-function seriesFor(areaId, g) {
-  const area = data.areas[areaId];
-  let s = pickSeries(area, g);
-  if (s) return { series: s, areaId, fallback: false };
-  s = pickSeries(data.areas[area.padd], g);
-  if (s) return { series: s, areaId: area.padd, fallback: true };
-  return { series: pickSeries(data.areas.NUS, g), areaId: 'NUS', fallback: true };
-}
-
 // ---- Rendering --------------------------------------------------------------
 
 function setStatus(msg, kind = '') {
@@ -231,19 +213,10 @@ function render(selectionValue) {
   if (!area) { setStatus(`No price data for ${sel.label} yet.`, 'error'); return; }
   const g = GRADES[grade];
 
-  const found = seriesFor(sel.areaId, grade);
+  const { found, args } = analysisInputs(data, sel.areaId, grade);
   if (!found.series) { setStatus(`No ${g.name.toLowerCase()} price data is available yet.`, 'error'); return; }
   const shownArea = data.areas[found.areaId];
-  const paddId = shownArea.padd;
-  const regionSeries = paddId !== found.areaId ? pickSeries(data.areas[paddId], grade) : null;
-  const outlookFamily = data.outlook[g.outlook] || {};
-  const outlook = outlookFamily[paddId] || outlookFamily.NUS || null;
-  const r = analyze({
-    series: found.series,
-    outlook,
-    regionSeries,
-    wholesale: { spot: data.wholesale[g.lead], wti: data.wholesale.wti },
-  });
+  const r = analyze(args);
 
   let label = sel.label;
   let note = sel.note;

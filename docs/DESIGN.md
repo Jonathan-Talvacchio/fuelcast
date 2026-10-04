@@ -62,7 +62,7 @@ it is likely headed.
                   GitHub Pages (static)
                          │  fetch('data/prices.json')
                          ▼
-   Browser: js/app.js ── js/regions.js ── js/predict.js ── js/chart.js
+   Browser: js/app.js ── js/regions.js ── js/inputs.js ── js/predict.js ── js/chart.js
 ```
 
 There are two moving parts and nothing else:
@@ -117,7 +117,9 @@ fall rolls jump 20¢+ between contracts.
                  "diesel":  { "NUS": [ ... ] } },
   "wholesale": { "wti":  [ { "date": "2026-09-09", "price": 97.26 } ],
                  "rbob": [ { "date": "2026-09-09", "price": 3.289 } ],
-                 "ulsd": [ { "date": "2026-09-09", "price": 4.85 } ] }
+                 "ulsd": [ { "date": "2026-09-09", "price": 4.85 } ] },
+  "verdicts":  { "date": "2026-10-04",                            // written by fetch-data.mjs, not the provider
+                 "regular": { "STX": "wait" }, "diesel": { ... } }   // per grade and area: now | ok | wait
 }
 ```
 
@@ -221,6 +223,14 @@ plain-English "near their 90-day low / around their recent average / …" summar
 | otherwise, `pos ≤ 0.2` | Fill up now | a good price that is not expected to get better |
 | otherwise | No rush — fill when convenient | prices look steady |
 
+**Hysteresis.** The wait line moves 1¢ (`verdictHysteresis`) in favour of yesterday's
+call: after a "wait" it takes `Δ14 > −$0.01` to stop waiting; after "fill up now" or
+"no rush" it takes `Δ14 ≤ −$0.03` to start. A forecast hovering near −2¢ no longer
+flips the advice day to day. The site is static, so the data job saves each day's
+verdict per grade and area in `data/prices.json` (`verdicts`); the next run and the
+browser read it back as the previous call (ignored once more than 3 days old).
+`js/inputs.js` builds the model inputs for both, so they always agree.
+
 Direction comes first by design: an earlier version derived the verdict from a
 blended 0–100 "deal score" and could say "wait" while predicting a rise. The score
 was later dropped from the UI entirely — one number that mixed "cheap vs. the last
@@ -262,8 +272,10 @@ evening (including EIA's weekly posting lag for spot prices), scoring against pr
 interpolated between reports. The futures fill is the largest gain found: on
 2022 onward (out of sample) regular-gas verdicts go from 64% to 68% right and from
 1.14¢ to 1.46¢/gal saved; diesel from 66% to 71% and 1.28¢ to 1.82¢. The cost is a
-more responsive verdict: it switches between wait and buy about 3 times a month
-instead of 1.6. Retuning `passThrough` / `leadLookbackDays`, a pump-vs-wholesale margin
+more responsive verdict: it switched between wait and buy about 3 times a month
+instead of 1.6. Hysteresis (1¢, chosen on 2016–2021) brings that back to 2.2 for gas
+and 2.1 for diesel on 2022 onward, with the same accuracy and 0.02¢/gal less saved
+on gas. Retuning `passThrough` / `leadLookbackDays`, a pump-vs-wholesale margin
 reversion term, a 7-day verdict horizon and regional wholesale hubs (Gulf Coast, Los
 Angeles) were also tried on the daily test and did not improve the decision.
 
@@ -331,8 +343,5 @@ Breakpoints at 760px (single column, 2×2 price tiles, shorter chart) and 400px
 2. **Custom domain** — DNS A/CNAME records to GitHub Pages; no code change.
 3. **Backtesting the outlook anchor** — needs archived STEO vintages (EIA publishes
    them as monthly files, not through the API); would let the full model be tested.
-4. **Verdict hysteresis** — keep yesterday's call unless the signal clears the threshold
-   by ~1¢; in the daily backtest this cuts wait↔buy switches by about a third at no cost
-   in savings. Needs the previous verdict stored in the data file.
-5. **Model refinements** — day-of-week seasonality if a daily source is added;
+4. **Model refinements** — day-of-week seasonality if a daily source is added;
    regional pass-through factors; a hurricane-season prior for Gulf Coast areas.

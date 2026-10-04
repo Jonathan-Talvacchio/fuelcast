@@ -28,20 +28,28 @@ The weekly test above scores Mondays only, but the site re-runs every evening. T
 |---|---|---|---|---|---|---|---|
 | Regular | EIA spot only | 0.90¢ | 40.0% | 66.0% | 37.5% | 2.78¢ / 3.16¢ | 1.6 |
 | Regular | + futures fill | 1.14¢ | 50.9% | 70.2% | 36.8% | 2.68¢ / 3.16¢ | 2.7 |
+| Regular | + hysteresis (current) | 1.14¢ | 50.5% | 70.3% | 37.1% | 2.68¢ / 3.16¢ | 1.9 |
 | Regular | EIA spot only, 2022+ | 1.14¢ | 36.6% | 64.4% | 40.5% | 3.81¢ / 4.32¢ | 1.6 |
 | Regular | + futures fill, 2022+ | 1.46¢ | 46.9% | 67.7% | 40.7% | 3.66¢ / 4.32¢ | 3.0 |
+| Regular | + hysteresis (current), 2022+ | 1.44¢ | 46.2% | 67.8% | 40.9% | 3.66¢ / 4.32¢ | 2.2 |
 | Midgrade | EIA spot only | 0.85¢ | 39.7% | 65.8% | 37.3% | 2.73¢ / 3.05¢ | 1.6 |
 | Midgrade | + futures fill | 1.07¢ | 49.9% | 69.7% | 36.6% | 2.65¢ / 3.05¢ | 2.6 |
+| Midgrade | + hysteresis (current) | 1.06¢ | 49.5% | 69.8% | 36.9% | 2.65¢ / 3.05¢ | 1.9 |
 | Midgrade | EIA spot only, 2022+ | 1.09¢ | 36.7% | 63.8% | 40.4% | 3.72¢ / 4.17¢ | 1.6 |
 | Midgrade | + futures fill, 2022+ | 1.38¢ | 46.5% | 67.3% | 40.6% | 3.59¢ / 4.17¢ | 3.0 |
+| Midgrade | + hysteresis (current), 2022+ | 1.35¢ | 45.6% | 67.4% | 40.8% | 3.59¢ / 4.17¢ | 2.2 |
 | Premium | EIA spot only | 0.84¢ | 39.9% | 66.1% | 37.3% | 2.68¢ / 3.03¢ | 1.6 |
 | Premium | + futures fill | 1.07¢ | 50.5% | 70.0% | 36.5% | 2.59¢ / 3.03¢ | 2.7 |
+| Premium | + hysteresis (current) | 1.06¢ | 50.1% | 70.2% | 36.8% | 2.59¢ / 3.03¢ | 1.9 |
 | Premium | EIA spot only, 2022+ | 1.08¢ | 36.8% | 64.0% | 40.3% | 3.67¢ / 4.15¢ | 1.6 |
 | Premium | + futures fill, 2022+ | 1.38¢ | 46.9% | 67.5% | 40.5% | 3.54¢ / 4.15¢ | 3.0 |
+| Premium | + hysteresis (current), 2022+ | 1.35¢ | 46.0% | 67.7% | 40.7% | 3.54¢ / 4.15¢ | 2.2 |
 | Diesel | EIA spot only | 0.86¢ | 47.6% | 68.5% | 36.4% | 2.22¢ / 2.70¢ | 1.5 |
 | Diesel | + futures fill | 1.15¢ | 63.3% | 72.2% | 35.1% | 2.12¢ / 2.70¢ | 2.4 |
+| Diesel | + hysteresis (current) | 1.15¢ | 63.7% | 72.2% | 35.0% | 2.12¢ / 2.70¢ | 1.7 |
 | Diesel | EIA spot only, 2022+ | 1.28¢ | 43.9% | 66.1% | 45.7% | 3.47¢ / 4.30¢ | 1.7 |
 | Diesel | + futures fill, 2022+ | 1.82¢ | 62.3% | 70.8% | 43.4% | 3.30¢ / 4.30¢ | 2.5 |
+| Diesel | + hysteresis (current), 2022+ | 1.82¢ | 62.6% | 70.7% | 43.8% | 3.30¢ / 4.30¢ | 2.1 |
 
 ## Regular
 
