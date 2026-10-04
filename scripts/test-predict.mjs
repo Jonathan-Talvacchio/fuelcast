@@ -259,3 +259,25 @@ test('shipped odds tables are well formed', async () => {
     for (const b of t) assert.ok(b.p > 0 && b.p < 1 && Math.abs(b.move) < 0.5, `${g} ${JSON.stringify(b)}`);
   }
 });
+
+test('track record scores calls a week out against interpolated reports', async () => {
+  const { scoreTrack, priceOn, appendHistory } = await import('../js/track.js');
+  const series = [
+    { date: '2026-09-07', price: 3.00 }, { date: '2026-09-14', price: 3.07 },
+    { date: '2026-09-21', price: 3.00 }, { date: '2026-09-28', price: 2.93 },
+  ];
+  assert.ok(Math.abs(priceOn(series, '2026-09-10') - 3.03) < 1e-9);
+  assert.equal(priceOn(series, '2026-10-01'), null);
+  const history = {
+    '2026-09-07': { regular: { A: 'wait' } },   // 3.00 → 3.07: wait was wrong, cost 7¢
+    '2026-09-14': { regular: { A: 'wait' } },   // 3.07 → 3.00: right, saved 7¢
+    '2026-09-21': { regular: { A: 'now' } },    // 3.00 → 2.93: buying now was wrong, saved 0
+    '2026-09-25': { regular: { A: 'ok' } },     // no price a week later yet: not scored
+  };
+  const t = scoreTrack(history, ['regular', 'diesel'], (g, id) => (g === 'regular' && id === 'A' ? series : null));
+  assert.deepEqual(t.regular.A, { n: 3, right: 1, saved: 0, waits: 2 });
+  assert.deepEqual(t.diesel, {});
+  // History keeps 120 days and stays sorted.
+  const h = appendHistory({ '2026-01-01': {}, '2026-09-01': {} }, '2026-10-04', { regular: {} });
+  assert.deepEqual(Object.keys(h), ['2026-09-01', '2026-10-04']);
+});

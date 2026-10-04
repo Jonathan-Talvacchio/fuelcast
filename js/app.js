@@ -167,6 +167,46 @@ function oddsText(r) {
   return `${odds} Waiting a week ${what} ${cents(o.move7)}/gal on average — <strong>about ${money(perFill)}</strong> on ${fill}.`;
 }
 
+// What to do with the tank today, given the call.
+function tankTip(r) {
+  if (r.verdict.key === 'wait') return 'Running low? Put in just enough to get through the week, then fill up. Running near empty to save a few cents isn\'t worth it.';
+  if (r.verdict.key === 'now' && r.change14 > 0) return 'Filling the tank all the way locks in today\'s price for longer.';
+  return '';
+}
+
+// The site's own record: verdicts it gave in this area, scored once EIA has
+// reported prices a week past them (js/track.js, run by the data job).
+const TRACK_MIN_CALLS = 14;
+function trackText(areaId, g) {
+  const t = data.track && data.track[g] && data.track[g][areaId];
+  if (!t || t.n < TRACK_MIN_CALLS) {
+    return 'Track record: building. Each day\'s call is scored once prices a week later are reported; results show here after two weeks of scored calls.';
+  }
+  const perFill = t.saved * fillGallons;
+  const money2 = perFill >= 0.005 ? `saved about ${money(perFill)}` : perFill <= -0.005 ? `cost about ${money(-perFill)}` : 'made no difference';
+  return `Track record here, last 90 days: ${t.right} of ${t.n} daily calls right. Following the advice ${money2} per ${fillGallons}-gallon fill-up on average, compared with always filling up right away.`;
+}
+
+// Bigger savings than timing. The premium line uses this area's own prices.
+function saveMoreItems(r, areaId, g) {
+  const items = [
+    { ico: '🗺️', t: 'Shop around', d: 'Stations in the same town often differ by more than any week-to-week move. Check a station-price map before you drive, especially near highways, where prices run higher.' },
+    { ico: '💵', t: 'Use discounts', d: 'Many stations charge less for cash or debit. Warehouse clubs, grocery-store fuel rewards and gas-rebate credit cards can take off several cents a gallon more.' },
+  ];
+  if (g.key === 'regular') {
+    const prem = pickSeries(data.areas[areaId], 'premium');
+    const reg = pickSeries(data.areas[areaId], 'regular');
+    if (prem && reg && prem[prem.length - 1].date === reg[reg.length - 1].date) {
+      const gap = prem[prem.length - 1].price - reg[reg.length - 1].price;
+      if (gap > 0) {
+        items.push({ ico: '🏷️', t: `Premium costs ${cents(gap)}/gal more here`,
+          d: `That's about ${money(gap * fillGallons)} on a ${fillGallons}-gallon fill-up. If your owner's manual says premium is <em>recommended</em> rather than <em>required</em>, regular is generally fine.` });
+      }
+    }
+  }
+  return items;
+}
+
 function reasonText(r, areaLabel) {
   const pos = r.range.pos;
   const where = pos <= 0.2 ? 'near their 90-day low'
@@ -264,6 +304,12 @@ function render(selectionValue) {
   $('reason').textContent = reasonText(r, label);
   $('odds').innerHTML = oddsText(r);
   $('odds').hidden = !r.odds;
+  const tip = tankTip(r);
+  $('tankTip').textContent = tip;
+  $('tankTip').hidden = !tip;
+  $('track').textContent = trackText(found.areaId, grade);
+  $('saveMore').innerHTML = saveMoreItems(r, found.areaId, { ...g, key: grade }).map(i =>
+    `<li><span class="ico" aria-hidden="true">${i.ico}</span><div><div class="t">${i.t}</div><div class="d">${i.d}</div></div></li>`).join('');
   $('lastReported').textContent = `$${r.lastReported.toFixed(3)}`;
   $('asOfDate').textContent = fmtDate(r.asOf);
   $('stale').innerHTML = r.daysSinceReport > 14

@@ -6,16 +6,20 @@
 //   DATA_PROVIDER  provider module name in scripts/providers/ (default: eia)
 //   EIA_API_KEY    EIA key; falls back to DEMO_KEY (rate-limited) with a warning
 //   OUTPUT         output path (default: data/prices.json)
+//   HISTORY        verdict history path (default: data/verdict-history.json)
 
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { analyze } from '../js/predict.js';
-import { analysisInputs } from '../js/inputs.js';
+import { analysisInputs, pickSeries } from '../js/inputs.js';
+import { FUEL_CHOICES } from '../js/regions.js';
+import { scoreTrack, appendHistory } from '../js/track.js';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const providerName = process.env.DATA_PROVIDER || 'eia';
 const output = resolve(root, process.env.OUTPUT || 'data/prices.json');
+const historyPath = resolve(root, process.env.HISTORY || 'data/verdict-history.json');
 
 let apiKey = process.env.EIA_API_KEY;
 if (!apiKey) {
@@ -27,6 +31,7 @@ const { fetchPrices } = await import(`./providers/${providerName}.mjs`);
 const data = await fetchPrices({ apiKey });
 validate(data);
 data.verdicts = await saveVerdicts(data);
+data.track = await updateTrack(data);
 
 await mkdir(dirname(output), { recursive: true });
 await writeFile(output, JSON.stringify(data));
@@ -60,6 +65,22 @@ async function saveVerdicts(d) {
     .filter(([id, k]) => previous?.[g]?.[id] && (previous[g][id] === 'wait') !== (k === 'wait')).map(([id, k]) => `${g}/${id}→${k}`));
   console.log(`Verdicts saved for ${saved.date}${previous ? ` (previous ${previous.date})` : ''}; wait↔buy changes: ${flips.join(', ') || 'none'}`);
   return saved;
+}
+
+// Keep a rolling history of the verdicts the site gave (the grades it offers)
+// and score them against the prices EIA has reported since — the live track
+// record shown on the page.
+async function updateTrack(d) {
+  let history = {};
+  try { history = JSON.parse(await readFile(historyPath, 'utf8')); } catch { /* first run */ }
+  const calls = Object.fromEntries(FUEL_CHOICES.filter(g => d.verdicts[g]).map(g => [g, d.verdicts[g]]));
+  history = appendHistory(history, d.verdicts.date, calls);
+  await mkdir(dirname(historyPath), { recursive: true });
+  await writeFile(historyPath, JSON.stringify(history, null, 0).replace(/\},"/g, '},\n"') + '\n');
+  const track = scoreTrack(history, FUEL_CHOICES, (g, id) => pickSeries(d.areas[id], g));
+  const scored = Object.values(track).flatMap(Object.values).reduce((n, a) => n + a.n, 0);
+  console.log(`Track record: ${Object.keys(history).length} days of calls kept, ${scored} scored`);
+  return track;
 }
 
 function validate(d) {
