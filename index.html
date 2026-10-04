@@ -9,6 +9,9 @@
   <meta name="theme-color" content="#1f6feb">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⛽</text></svg>">
   <link rel="stylesheet" href="css/style.css">
+  <link id="feedAlt" rel="alternate" type="application/rss+xml" title="Fuelcast advice for this area" href="data/feeds/regular-NUS.xml">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 </head>
 <body>
   <header class="site-header">
@@ -57,6 +60,7 @@
           <p id="tankTip" class="tank-tip" hidden></p>
           <p class="asof">Latest reported average: <strong id="lastReported">—</strong> on <span id="asOfDate">—</span><span id="stale"></span></p>
           <p class="asof" id="track"></p>
+          <p class="asof"><a id="feedLink" href="#" hidden title="An RSS feed for this area and fuel. Add it to a feed reader, or to a feed-to-email or phone-notification service.">🔔 Get an alert when this advice changes (RSS)</a></p>
         </div>
       </section>
 

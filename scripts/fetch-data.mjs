@@ -7,13 +7,17 @@
 //   EIA_API_KEY    EIA key; falls back to DEMO_KEY (rate-limited) with a warning
 //   OUTPUT         output path (default: data/prices.json)
 //   HISTORY        verdict history path (default: data/verdict-history.json)
+//   FEEDS_DIR      where the RSS feeds go (default: the repo root, as data/feeds/…)
+//   SITE_URL       public site URL for feed links (default: GitHub Pages URL from
+//                  GITHUB_REPOSITORY, else https://jonathan-talvacchio.github.io/fuelcast/)
 
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { analyze } from '../js/predict.js';
 import { analysisInputs, pickSeries } from '../js/inputs.js';
-import { FUEL_CHOICES } from '../js/regions.js';
+import { FUEL_CHOICES, GRADES } from '../js/regions.js';
+import { buildFeeds } from '../js/feeds.js';
 import { scoreTrack, appendHistory } from '../js/track.js';
 import { healthOf, healthProblems } from '../js/health.js';
 
@@ -21,6 +25,10 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const providerName = process.env.DATA_PROVIDER || 'eia';
 const output = resolve(root, process.env.OUTPUT || 'data/prices.json');
 const historyPath = resolve(root, process.env.HISTORY || 'data/verdict-history.json');
+const feedsRoot = resolve(root, process.env.FEEDS_DIR || '.');
+const siteUrl = process.env.SITE_URL || (process.env.GITHUB_REPOSITORY
+  ? `https://${process.env.GITHUB_REPOSITORY.split('/')[0].toLowerCase()}.github.io/${process.env.GITHUB_REPOSITORY.split('/')[1]}/`
+  : 'https://jonathan-talvacchio.github.io/fuelcast/');
 
 let apiKey = process.env.EIA_API_KEY;
 if (!apiKey) {
@@ -34,7 +42,11 @@ validate(data);
 let previous = {};   // the file being replaced: yesterday's verdicts and health
 try { previous = JSON.parse(await readFile(output, 'utf8')); } catch { /* first run */ }
 data.verdicts = saveVerdicts(data, previous.verdicts || null);
-data.track = await updateTrack(data);
+const history = await updateHistory(data);
+data.track = scoreTrack(history, FUEL_CHOICES, (g, id) => pickSeries(data.areas[id], g));
+const scored = Object.values(data.track).flatMap(Object.values).reduce((n, a) => n + a.n, 0);
+console.log(`Track record: ${Object.keys(history).length} days of calls kept, ${scored} scored`);
+await writeFeeds(history);
 data.health = healthOf(data, previous.health || null);
 for (const p of healthProblems(data.health)) console.warn(`Warning: ${p}`);
 
@@ -70,20 +82,28 @@ function saveVerdicts(d, previous) {
   return saved;
 }
 
-// Keep a rolling history of the verdicts the site gave (the grades it offers)
-// and score them against the prices EIA has reported since — the live track
-// record shown on the page.
-async function updateTrack(d) {
+// Keep a rolling history of the verdicts the site gave (the grades it offers).
+// It feeds the live track record and the RSS alerts.
+async function updateHistory(d) {
   let history = {};
   try { history = JSON.parse(await readFile(historyPath, 'utf8')); } catch { /* first run */ }
   const calls = Object.fromEntries(FUEL_CHOICES.filter(g => d.verdicts[g]).map(g => [g, d.verdicts[g]]));
   history = appendHistory(history, d.verdicts.date, calls);
   await mkdir(dirname(historyPath), { recursive: true });
   await writeFile(historyPath, JSON.stringify(history, null, 0).replace(/\},"/g, '},\n"') + '\n');
-  const track = scoreTrack(history, FUEL_CHOICES, (g, id) => pickSeries(d.areas[id], g));
-  const scored = Object.values(track).flatMap(Object.values).reduce((n, a) => n + a.n, 0);
-  console.log(`Track record: ${Object.keys(history).length} days of calls kept, ${scored} scored`);
-  return track;
+  return history;
+}
+
+// One RSS feed per area and fuel; an item each time the advice changes.
+async function writeFeeds(history) {
+  const grades = Object.fromEntries(FUEL_CHOICES.map(g => [g, GRADES[g].short]));
+  const files = buildFeeds(history, data.areas, grades, siteUrl);
+  for (const [path, xml] of Object.entries(files)) {
+    const full = resolve(feedsRoot, path);
+    await mkdir(dirname(full), { recursive: true });
+    await writeFile(full, xml);
+  }
+  console.log(`Feeds: ${Object.keys(files).length} written for ${siteUrl}`);
 }
 
 function validate(d) {

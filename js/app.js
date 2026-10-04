@@ -175,6 +175,15 @@ function oddsText(r) {
 function tankTip(r) {
   if (r.verdict.key === 'wait') return 'Running low? Put in just enough to get through the week, then fill up. Running near empty to save a few cents isn\'t worth it.';
   if (r.verdict.key === 'now' && r.change14 > 0) return 'Filling the tank all the way locks in today\'s price for longer.';
+  return dayTip(r, new Date().getDay());
+}
+
+// Day-of-week habit, as a tip only: the weekly data can't confirm it per area.
+// Only on "no rush", where it can't contradict the call.
+function dayTip(r, dow) {
+  if (r.verdict.key !== 'ok') return '';
+  if (dow >= 4) return 'No rush, so if you can, fill up early next week: stations often raise prices heading into the weekend, and Monday or Tuesday tends to be cheaper.';
+  if (dow <= 2) return 'Early in the week tends to be a cheaper time to fill up, so today is a reasonable day if you need gas.';
   return '';
 }
 
@@ -312,6 +321,10 @@ function render(selectionValue) {
   $('tankTip').textContent = tip;
   $('tankTip').hidden = !tip;
   $('track').textContent = trackText(found.areaId, grade);
+  const feed = `data/feeds/${grade}-${found.areaId}.xml`;
+  $('feedLink').href = feed;
+  $('feedLink').hidden = !(data.verdicts && data.verdicts[grade] && data.verdicts[grade][found.areaId]);
+  $('feedAlt').href = feed;
   $('saveMore').innerHTML = saveMoreItems(r, found.areaId, { ...g, key: grade }).map(i =>
     `<li><span class="ico" aria-hidden="true">${i.ico}</span><div><div class="t">${i.t}</div><div class="d">${i.d}</div></div></li>`).join('');
   $('lastReported').textContent = `$${r.lastReported.toFixed(3)}`;

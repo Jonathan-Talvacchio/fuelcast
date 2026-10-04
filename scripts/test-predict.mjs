@@ -309,3 +309,26 @@ test('health: freshness, futures streak, and alerts', async () => {
   // Stale EIA data alerts on its own.
   assert.equal(healthProblems(h, at + 12 * DAY).length, 2);
 });
+
+test('feeds: an item per change of advice, newest first, escaped', async () => {
+  const { buildFeeds, feedPath } = await import('../js/feeds.js');
+  const history = {
+    '2026-10-01': { regular: { A: 'ok' } },
+    '2026-10-02': { regular: { A: 'ok' } },
+    '2026-10-03': { regular: { A: 'wait' } },
+    '2026-10-04': { regular: { A: 'now' }, diesel: { A: 'ok' } },
+  };
+  const files = buildFeeds(history, { A: { name: 'Tom & Jerry' }, B: { name: 'Nowhere' } },
+    { regular: 'Gas', diesel: 'Diesel' }, 'https://example.test/fuelcast/');
+  assert.deepEqual(Object.keys(files).sort(), [feedPath('diesel', 'A'), feedPath('regular', 'A')].sort());
+  const xml = files[feedPath('regular', 'A')];
+  const titles = [...xml.matchAll(/<item>\s*<title>([^<]*)<\/title>/g)].map(m => m[1]);
+  assert.deepEqual(titles, [
+    'Tom &amp; Jerry gas: Fill up now',
+    'Tom &amp; Jerry gas: Wait if you can — top off only',
+    'Tom &amp; Jerry gas: No rush — fill when convenient',
+  ]);
+  assert.match(xml, /<lastBuildDate>Sun, 04 Oct 2026 21:00:00 GMT<\/lastBuildDate>/);
+  assert.match(xml, /<link>https:\/\/example\.test\/fuelcast\/#area%3AA<\/link>/);
+  assert.match(files[feedPath('diesel', 'A')], /#area%3AA\/diesel/);
+});

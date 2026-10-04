@@ -322,13 +322,19 @@ Single page, mobile-first, no framework. Reading order matches decision order:
    summary (position vs. 90-day range + predicted move), the odds (how often prices
    were lower a week later after similar forecasts, and what waiting a week saved or
    cost on average for the user's fill-up), a tank tip on "wait" (buy just enough to
-   get through the week) and rising "fill up now" calls (fill all the way), the last
+   get through the week) and rising "fill up now" calls (fill all the way) — or, on
+   "no rush", a day-of-week tip (stations often raise prices toward the weekend; early
+   week tends to be cheaper — a tip, since weekly data can't confirm it per area), the last
    reported price and date, and the **track record**: the site's own daily calls for
    this area over the last 90 days, scored once EIA has reported prices a week past
    each one — how many were right and what following them saved per fill-up versus
    always filling up right away. The data job keeps the calls in
    `data/verdict-history.json` (120 days) and stores the summary in `prices.json`
-   (`track`, via `js/track.js`); the page shows it once 14 calls are scored. The card's left rule and headline take the verdict color.
+   (`track`, via `js/track.js`); the page shows it once 14 calls are scored. Below it,
+   a link to the area's **alert feed**: RSS, one per area and fuel
+   (`data/feeds/<grade>-<area>.xml`, built by `js/feeds.js` from the verdict history),
+   with an item each time the call changes. Any feed reader or feed-to-email/phone
+   service turns that into a notification, with no server or sign-up. The card's left rule and headline take the verdict color.
 3. **Price strip** — Today (est.) · Tomorrow · This week avg · Next week avg, each
    with a rounded-cents delta so the numbers and deltas never contradict.
 4. **Trend chart** — 13 weeks reported (solid, points) + 14 days predicted (dashed)
@@ -342,6 +348,10 @@ Single page, mobile-first, no framework. Reading order matches decision order:
    what premium costs over regular in this area for the user's fill-up. Timing saves
    cents a gallon; these usually save more.
 8. **How this works** and the **disclaimer** footer.
+
+The page can be installed to a phone's home screen: `manifest.webmanifest` plus icons
+in `icons/` (drawn by `icons/build-icons.py`). There is no service worker — offline
+copies of prices would go stale, and the page is a single small request anyway.
 
 States: loading, fetch failure, stale data banner (file older than 10 days), and a
 per-area "report is N days old" flag when a report is more than 14 days old.
