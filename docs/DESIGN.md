@@ -283,7 +283,11 @@ instead of 1.6. Hysteresis (1¢, chosen on 2016–2021) brings that back to 2.2 
 and 2.1 for diesel on 2022 onward, with the same accuracy and 0.02¢/gal less saved
 on gas. Retuning `passThrough` / `leadLookbackDays`, a pump-vs-wholesale margin
 reversion term, a 7-day verdict horizon and regional wholesale hubs (Gulf Coast, Los
-Angeles) were also tried on the daily test and did not improve the decision.
+Angeles) were also tried on the daily test and did not improve the decision. Neither
+did "rockets and feathers" — a larger or faster pass-through when wholesale rises
+than when it falls (2016–2021: gas at best tied, 72.5% right; diesel fell from 73.6%
+to 69.7–71.8%) — nor damping the forecast in the Midwest price-cycling areas (full
+strength was best or tied in every area on 2016–2021).
 
 **Odds.** The verdict card also says how often, historically, the price was lower a
 week after forecasts like today's, and the average move — in money for the user's
@@ -296,6 +300,18 @@ information. The extremes are less certain than the history before 2022 suggeste
 shipped table uses all years and the page rounds to the nearest 5%. The average move
 is small — about 1–4¢/gal in the strongest buckets — and the page says so in
 dollars rather than letting the verdict imply more.
+
+**Per-area reliability.** One national table overstates the odds where prices move in
+sharp, irregular cycles: in Ohio and Cleveland the call is right only 55–64% of the
+time. Each area gets a factor `k` (least squares of its outcomes on the table's odds,
+capped to 0.3–1) that scales its odds toward 50/50, `p' = 0.5 + k·(p − 0.5)`, and its
+average move by `k`; the page says plainly when `k < 0.7` (Ohio 0.40, Cleveland
+0.54). With the table and factors both fitted on 2016–2021 and scored on 2022+, the
+gas holdout Brier improves from 0.2105 to 0.2069 (base rate 0.2493); before this,
+the Ohio and Cleveland odds did worse than a flat 50% guess. Letting
+`k` exceed 1 for the most predictable areas (the East Coast) made the holdout worse,
+hence the cap. Diesel's areas all sit near 1. The verdict itself is unchanged: even in
+the cycling areas, following it still saved money against always buying right away.
 
 ## 8. User interface
 
@@ -338,7 +354,8 @@ Breakpoints at 760px (single column, 2×2 price tiles, shorter chart) and 400px
 ## 9. Deployment and operations
 
 - **`deploy-pages.yml`** — on push to `main`: upload the repo root as the Pages artifact and deploy.
-- **`update-data.yml`** — daily at 21:00 UTC (after EIA's Monday ~5 pm ET release) and on demand: run tests → fetch → commit if changed → deploy. Uses the `EIA_API_KEY` secret; falls back to EIA's rate-limited `DEMO_KEY` with a warning.
+- **`update-data.yml`** — daily at 21:00 UTC (after EIA's Monday ~5 pm ET release) and on demand: run tests → fetch → commit if changed → deploy, then a separate **health** job. Uses the `EIA_API_KEY` secret; falls back to EIA's rate-limited `DEMO_KEY` with a warning.
+- **Monitoring** — the fetch records `health` in `prices.json` (latest EIA retail and spot dates, how far the wholesale series reaches, whether the futures fill worked and for how many runs it hasn't). The health job (`scripts/check-health.mjs`, rules in `js/health.js`) fails the run — so GitHub emails the owner — when EIA retail or spot data is more than 10 days old or the futures fill has failed 3 runs in a row. It runs after the commit and deploy, so an alert never holds back an update.
 - Both workflows share the `pages` concurrency group so deploys never overlap.
 - Pages source is "GitHub Actions"; `.nojekyll` prevents Jekyll processing.
 - Local development: `python -m http.server 8765` (modules need HTTP); `node scripts/fetch-data.mjs` to refresh data; `node --test scripts/test-predict.mjs` for the 14 model/region tests.

@@ -155,16 +155,20 @@ function delta(el, value, base, suffix) {
 
 // The verdict in money: how often the price was lower a week after forecasts
 // like today's, and what waiting a week was worth on the user's fill-up.
+const LOW_SKILL = 0.7;   // below this, say plainly that the call is less reliable here
 function oddsText(r) {
   const o = r.odds;
   if (!o) return '';
   const pct = Math.round(o.pLower * 20) * 5;   // nearest 5%: the history doesn't support more precision
   const perFill = Math.abs(o.move7) * fillGallons;
   const fill = `your ${fillGallons}-gallon fill-up`;
-  const odds = `After forecasts like this, prices were lower a week later <strong>${pct}%</strong> of the time.`;
+  const odds = `After forecasts like this, prices were lower a week later <strong>${pct}%</strong> of the time.`
+    + (o.skill < LOW_SKILL ? ' Prices here jump in sharp, irregular cycles, so the call is less reliable than in most areas and the odds are closer to a coin flip.' : '');
   if (perFill < 0.05) return `${odds} Either way, waiting a week made less than 5¢ of difference on ${fill}.`;
   const what = o.move7 < 0 ? 'saved' : 'cost';
-  return `${odds} Waiting a week ${what} ${cents(o.move7)}/gal on average — <strong>about ${money(perFill)}</strong> on ${fill}.`;
+  // A tenth of a cent matters here: these averages are often under 1¢/gal.
+  const perGal = Math.abs(o.move7) < 0.1 ? `${(Math.abs(o.move7) * 100).toFixed(1)}¢` : cents(o.move7);
+  return `${odds} Waiting a week ${what} ${perGal}/gal on average — <strong>about ${money(perFill)}</strong> on ${fill}.`;
 }
 
 // What to do with the tank today, given the call.

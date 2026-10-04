@@ -128,7 +128,10 @@ export async function fetchPrices({ apiKey }) {
   }
   for (const k of Object.keys(wholesale)) wholesale[k].sort(byDateAsc);
   // EIA posts spot prices weekly; fill the days since from NYMEX futures.
-  for (const line of await extendWithFutures(wholesale)) console.log(`Wholesale: ${line}`);
+  const futures = await extendWithFutures(wholesale);
+  for (const [k, f] of Object.entries(futures)) {
+    console.log(`Wholesale: ${k} ${f.error ? `futures skipped (${f.symbol}: ${f.error})` : `+${f.added}d from ${f.symbol}`}`);
+  }
   for (const k of Object.keys(wholesale)) wholesale[k] = wholesale[k].slice(-WHOLESALE_DAYS);
 
   return {
@@ -138,6 +141,7 @@ export async function fetchPrices({ apiKey }) {
       name: 'U.S. Energy Information Administration',
       url: 'https://www.eia.gov/petroleum/gasdiesel/',
       cadence: 'weekly',
+      futures,
       note: 'Weekly retail prices for regular, midgrade and premium gasoline (all formulations) and on-highway diesel, posted Mondays. Outlook from the EIA Short-Term Energy Outlook. Wholesale from EIA daily spot prices, with the days since EIA posted them estimated from NYMEX futures.',
     },
     grades: Object.fromEntries(Object.entries(GRADES).map(([g, x]) => [g, { name: x.name, lead: x.lead, outlook: x.outlook }])),

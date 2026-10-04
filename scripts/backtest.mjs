@@ -41,7 +41,7 @@ import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { analyze, MODEL, parseDate } from '../js/predict.js';
+import { analyze, MODEL, parseDate, oddsFor } from '../js/predict.js';
 import { AREAS, GRADES } from '../js/regions.js';
 import { splice } from './providers/futures.mjs';
 
@@ -251,7 +251,7 @@ function dailyWalk(history, grade, { futures: withFutures = true, outlook: withO
       if (prev !== null) { pairs++; if (prev !== wait) flips++; }
       prev = wait;
       prevKey = r.verdict.key;
-      rows.push({ day: isoDay(D), wait, change14: r.change14, t0: truth(D), t7: truth(D + 7 * DAY), est: r.today, last: series[ri - 1].price });
+      rows.push({ area, day: isoDay(D), wait, change14: r.change14, t0: truth(D), t7: truth(D + 7 * DAY), est: r.today, last: series[ri - 1].price });
     }
   }
   const now = mean(rows.map(r => r.t0));
@@ -282,6 +282,25 @@ function oddsTable(rows) {
     n: b.length,
   }));
 }
+// Per-area reliability: how far each area's outcomes follow the odds table,
+// as a factor k that scales the odds toward 50/50 (p' = 0.5 + k·(p − 0.5)),
+// fitted by least squares. Capped at 1 — boosting areas above the table made
+// the holdout worse — with a floor so no area reads as pure noise.
+const SKILL_RANGE = [0.3, 1];
+function areaSkill(rows, table) {
+  const sorted = table.map(b => ({ x: b.xMean, p: b.pLower })).sort((a, b) => a.x - b.x);
+  const pOf = x => oddsFor(x, sorted.map(b => ({ x: b.x, p: b.p, move: 0 }))).pLower;
+  const acc = {};
+  for (const r of rows) {
+    const a = (acc[r.area] ||= { num: 0, den: 0 });
+    const p = pOf(r.change14) - 0.5;
+    a.num += p * ((r.t7 < r.t0 ? 1 : 0) - 0.5);
+    a.den += p * p;
+  }
+  return Object.fromEntries(Object.entries(acc).map(([id, a]) =>
+    [id, Math.min(SKILL_RANGE[1], Math.max(SKILL_RANGE[0], a.den ? a.num / a.den : 1))]));
+}
+
 const nearestBin = (table, x) => table.reduce((best, b) => (Math.abs(b.xMean - x) < Math.abs(best.xMean - x) ? b : best));
 
 // ---- Metrics ----------------------------------------------------------------
@@ -430,12 +449,16 @@ for (const grade of GRADE_IDS) {
     const lower = r => (r.t7 < r.t0 ? 1 : 0);
     const trainTable = oddsTable(train);
     const base = mean(test.map(lower));
+    const trainSkill = areaSkill(train, trainTable);
+    const shrunk = r => 0.5 + trainSkill[r.area] * (nearestBin(trainTable, r.change14).pLower - 0.5);
     odds = {
       table: oddsTable(all), train: trainTable, test: oddsTable(test),
       brier: mean(test.map(r => (nearestBin(trainTable, r.change14).pLower - lower(r)) ** 2)),
+      brierSkill: mean(test.map(r => (shrunk(r) - lower(r)) ** 2)),
       brierBase: mean(test.map(r => (base - lower(r)) ** 2)),
     };
-    console.log(`Odds: holdout Brier ${odds.brier.toFixed(4)} with a pre-${DAILY_HOLDOUT.slice(0, 4)} table vs ${odds.brierBase.toFixed(4)} for the base rate`);
+    odds.skill = areaSkill(all, odds.table);
+    console.log(`Odds: holdout Brier ${odds.brier.toFixed(4)} with a pre-${DAILY_HOLDOUT.slice(0, 4)} table, ${odds.brierSkill.toFixed(4)} with per-area reliability, vs ${odds.brierBase.toFixed(4)} for the base rate`);
   }
   results[grade] = { base, noWholesale, perArea, sweep, daily, odds };
 }
@@ -451,6 +474,13 @@ if (flag('calibrate')) {
     '// average actual 7-day change ($/gal). See docs/BACKTEST.md ("Odds").',
     'export const ODDS = {',
     ...Object.entries(tables).flatMap(([g, rows]) => [`  ${g}: [`, ...rows.map(r => `    ${JSON.stringify(r)},`), '  ],']),
+    '};', '',
+    '// Per-area reliability k (0.3–1): the odds shown for an area are scaled toward',
+    '// 50/50 as 0.5 + k·(p − 0.5), and the average move by k. Areas with sharp,',
+    '// irregular price cycles score lowest. See docs/BACKTEST.md ("Odds").',
+    'export const SKILL = {',
+    ...Object.entries(results).filter(([, r]) => r.odds).map(([g, r]) =>
+      `  ${g}: ${JSON.stringify(Object.fromEntries(Object.entries(r.odds.skill).map(([id, k]) => [id, +k.toFixed(2)])))},`),
     '};', '',
   ].join('\n'));
   console.log(`\nWrote ${out}`);
@@ -506,7 +536,9 @@ function renderReport(results) {
     for (const [g, r] of Object.entries(results)) {
       if (!r.odds) continue;
       const o = r.odds;
-      lines.push(`**${GRADES[g].name}** — holdout Brier ${o.brier.toFixed(4)} vs ${o.brierBase.toFixed(4)} for the base rate.`, '',
+      const weak = Object.entries(o.skill).filter(([, k]) => k < 0.995).sort((a, b) => a[1] - b[1])
+        .map(([id, k]) => `${AREAS[id].name} ${k.toFixed(2)}`).join(', ') || 'none';
+      lines.push(`**${GRADES[g].name}** — holdout Brier ${o.brier.toFixed(4)} vs ${o.brierBase.toFixed(4)} for the base rate; ${o.brierSkill.toFixed(4)} with per-area reliability fitted on the earlier years. Areas whose odds are scaled toward 50/50 (k < 1): ${weak}.`, '',
         `| Predicted 14-day change (bin avg) | Lower a week later | before ${yr} / ${yr}+ | Avg 7-day move | Days |`, '|---|---|---|---|---|');
       for (const b of o.table) {
         const tr = nearestBin(o.train, b.xMean), te = nearestBin(o.test, b.xMean);

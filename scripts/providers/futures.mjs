@@ -48,20 +48,21 @@ export function splice(spot, futures, maxDays = MAX_FILL_DAYS) {
   return [...spot, ...fill];
 }
 
-// Mutates `wholesale` (keys rbob / ulsd) in place; returns a log line per series.
+// Mutates `wholesale` (keys rbob / ulsd) in place; returns { key: { symbol,
+// added } or { symbol, error } } per series.
 export async function extendWithFutures(wholesale) {
-  const log = [];
+  const status = {};
   for (const [key, root] of Object.entries(SYMBOL)) {
     const spot = wholesale[key];
     if (!spot?.length) continue;
     const symbol = contractFor(root, spot[spot.length - 1].date);
     try {
       const out = splice(spot, await settlements(symbol));
-      log.push(`${key} +${out.length - spot.length}d from ${symbol}`);
+      status[key] = { symbol, added: out.length - spot.length };
       wholesale[key] = out;
     } catch (e) {
-      log.push(`${key} futures skipped (${symbol}: ${e.message})`);
+      status[key] = { symbol, error: e.message };
     }
   }
-  return log;
+  return status;
 }

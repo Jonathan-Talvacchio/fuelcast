@@ -15,6 +15,7 @@ import { analyze } from '../js/predict.js';
 import { analysisInputs, pickSeries } from '../js/inputs.js';
 import { FUEL_CHOICES } from '../js/regions.js';
 import { scoreTrack, appendHistory } from '../js/track.js';
+import { healthOf, healthProblems } from '../js/health.js';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const providerName = process.env.DATA_PROVIDER || 'eia';
@@ -30,8 +31,12 @@ if (!apiKey) {
 const { fetchPrices } = await import(`./providers/${providerName}.mjs`);
 const data = await fetchPrices({ apiKey });
 validate(data);
-data.verdicts = await saveVerdicts(data);
+let previous = {};   // the file being replaced: yesterday's verdicts and health
+try { previous = JSON.parse(await readFile(output, 'utf8')); } catch { /* first run */ }
+data.verdicts = saveVerdicts(data, previous.verdicts || null);
 data.track = await updateTrack(data);
+data.health = healthOf(data, previous.health || null);
+for (const p of healthProblems(data.health)) console.warn(`Warning: ${p}`);
 
 await mkdir(dirname(output), { recursive: true });
 await writeFile(output, JSON.stringify(data));
@@ -47,9 +52,7 @@ console.log(`Wrote ${output}: ${areaCount} areas, latest retail ${latest}; grade
 // Today's verdict for every area and grade with its own series, saved so that
 // tomorrow's call (here and in the browser) can apply hysteresis against it.
 // Yesterday's saved verdicts come from the file being replaced.
-async function saveVerdicts(d) {
-  let previous = null;
-  try { previous = JSON.parse(await readFile(output, 'utf8')).verdicts || null; } catch { /* first run */ }
+function saveVerdicts(d, previous) {
   const now = Date.now();
   const saved = { date: new Date(now).toISOString().slice(0, 10) };
   const withPrevious = { ...d, verdicts: previous };

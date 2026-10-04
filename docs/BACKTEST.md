@@ -71,7 +71,7 @@ The weekly test above scores Mondays only, but the site re-runs every evening. T
 
 The site shows how often, historically, the price was lower a week later — and the average move — for forecasts like today's: the daily walk with the current model, bucketed by the predicted 14-day change. To check that this generalizes, a table built only from the years before 2022 is scored on 2022 onward (Brier score, lower is better; "base rate" always predicts the holdout's own share of lower weeks).
 
-**Regular** — holdout Brier 0.2105 vs 0.2493 for the base rate.
+**Regular** — holdout Brier 0.2105 vs 0.2493 for the base rate; 0.2069 with per-area reliability fitted on the earlier years. Areas whose odds are scaled toward 50/50 (k < 1): Ohio 0.40, Cleveland 0.54, Chicago 0.75, Denver 0.91, Midwest 0.92, San Francisco 0.94, Colorado 0.96, Rocky Mountain 0.99.
 
 | Predicted 14-day change (bin avg) | Lower a week later | before 2022 / 2022+ | Avg 7-day move | Days |
 |---|---|---|---|---|
@@ -86,7 +86,7 @@ The site shows how often, historically, the price was lower a week later — and
 | +4.99¢ | 29.9% | 27.6% / 33.7% | +2.20¢ | 9,245 |
 | +12.15¢ | 23.0% | 18.0% / 27.6% | +4.37¢ | 28,065 |
 
-**Midgrade** — holdout Brier 0.2115 vs 0.2495 for the base rate.
+**Midgrade** — holdout Brier 0.2115 vs 0.2495 for the base rate; 0.2083 with per-area reliability fitted on the earlier years. Areas whose odds are scaled toward 50/50 (k < 1): Ohio 0.42, Cleveland 0.56, Chicago 0.77, Midwest 0.89, Rocky Mountain 0.92, Denver 0.93, San Francisco 0.93, Colorado 0.99.
 
 | Predicted 14-day change (bin avg) | Lower a week later | before 2022 / 2022+ | Avg 7-day move | Days |
 |---|---|---|---|---|
@@ -101,7 +101,7 @@ The site shows how often, historically, the price was lower a week later — and
 | +4.98¢ | 30.2% | 26.9% / 35.7% | +2.16¢ | 9,245 |
 | +12.11¢ | 23.1% | 18.3% / 27.5% | +4.27¢ | 28,091 |
 
-**Premium** — holdout Brier 0.2111 vs 0.2496 for the base rate.
+**Premium** — holdout Brier 0.2111 vs 0.2496 for the base rate; 0.2081 with per-area reliability fitted on the earlier years. Areas whose odds are scaled toward 50/50 (k < 1): Ohio 0.42, Cleveland 0.57, Chicago 0.79, San Francisco 0.94, Denver 0.95, Midwest 0.96, Rocky Mountain 0.97, Seattle 0.98, Colorado 0.98.
 
 | Predicted 14-day change (bin avg) | Lower a week later | before 2022 / 2022+ | Avg 7-day move | Days |
 |---|---|---|---|---|
@@ -116,7 +116,7 @@ The site shows how often, historically, the price was lower a week later — and
 | +4.98¢ | 29.6% | 26.4% / 34.9% | +2.16¢ | 9,209 |
 | +12.11¢ | 22.5% | 17.6% / 27.0% | +4.34¢ | 28,130 |
 
-**Diesel** — holdout Brier 0.1971 vs 0.2462 for the base rate.
+**Diesel** — holdout Brier 0.1971 vs 0.2462 for the base rate; 0.1967 with per-area reliability fitted on the earlier years. Areas whose odds are scaled toward 50/50 (k < 1): Rocky Mountain 0.95, Midwest 0.97.
 
 | Predicted 14-day change (bin avg) | Lower a week later | before 2022 / 2022+ | Avg 7-day move | Days |
 |---|---|---|---|---|

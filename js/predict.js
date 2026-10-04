@@ -147,18 +147,21 @@ function volatility(series) {
 
 // Historical odds for a forecast: interpolates a table from js/calibration.js
 // (rows of { x: predicted 14-day change, p: share lower a week later, move:
-// average 7-day change }) at this forecast. Null without a table.
-export function oddsFor(change14, table) {
+// average 7-day change }) at this forecast, scaled toward 50/50 by the area's
+// reliability `skill` (1 = the table as is). Null without a table.
+export function oddsFor(change14, table, skill = 1) {
   if (!table || !table.length || !Number.isFinite(change14)) return null;
   const t = [...table].sort((a, b) => a.x - b.x);
-  if (change14 <= t[0].x) return { pLower: t[0].p, move7: t[0].move };
-  for (let i = 1; i < t.length; i++) {
-    if (change14 <= t[i].x) {
-      const f = (change14 - t[i - 1].x) / (t[i].x - t[i - 1].x);
-      return { pLower: t[i - 1].p + f * (t[i].p - t[i - 1].p), move7: t[i - 1].move + f * (t[i].move - t[i - 1].move) };
-    }
+  let p, move;
+  if (change14 <= t[0].x) ({ p, move } = t[0]);
+  else if (change14 >= t[t.length - 1].x) ({ p, move } = t[t.length - 1]);
+  else {
+    const i = t.findIndex(b => change14 <= b.x);
+    const f = (change14 - t[i - 1].x) / (t[i].x - t[i - 1].x);
+    p = t[i - 1].p + f * (t[i].p - t[i - 1].p);
+    move = t[i - 1].move + f * (t[i].move - t[i - 1].move);
   }
-  return { pLower: t[t.length - 1].p, move7: t[t.length - 1].move };
+  return { pLower: 0.5 + skill * (p - 0.5), move7: skill * move, skill };
 }
 
 // Timing advice follows the predicted direction; when prices look steady, where
@@ -184,8 +187,9 @@ export function verdictFor(change14, rangePos = 0.5, prev = null) {
  * @param {number} [p.now]  ms timestamp for "today" (defaults to Date.now())
  * @param {string|null} [p.prevVerdict]  the previous day's verdict key, for hysteresis
  * @param {{x:number,p:number,move:number}[]} [p.odds]  calibration table for this grade (js/calibration.js)
+ * @param {number} [p.oddsSkill]  this area's reliability factor for the odds (js/calibration.js SKILL)
  */
-export function analyze({ series, outlook, regionSeries, wholesale, now = Date.now(), prevVerdict = null, odds = null }) {
+export function analyze({ series, outlook, regionSeries, wholesale, now = Date.now(), prevVerdict = null, odds = null, oddsSkill = 1 }) {
   if (!series || !series.length) throw new Error('No price history for this area');
   const pts = [...series].sort((a, b) => parseDate(a.date) - parseDate(b.date));
   const latest = pts[pts.length - 1];
@@ -269,7 +273,7 @@ export function analyze({ series, outlook, regionSeries, wholesale, now = Date.n
     today, tomorrow, thisWeek, nextWeek,
     change14, change30, direction,
     verdict,
-    odds: oddsFor(change14, odds),
+    odds: oddsFor(change14, odds, oddsSkill),
     range: { low: lo, high: hi, avg: mean(window), pos: rangePos, days: MODEL.rangeDays },
     drivers: {
       momentumPerWeek: slope * 7,

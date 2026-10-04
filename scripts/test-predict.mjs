@@ -240,9 +240,12 @@ test('saved verdicts feed the next analysis only while recent', async () => {
 
 test('odds interpolate the calibration table and clamp at its ends', () => {
   const table = [{ x: -0.05, p: 0.8, move: -0.02 }, { x: 0, p: 0.5, move: 0 }, { x: 0.05, p: 0.3, move: 0.02 }];
-  assert.deepEqual(oddsFor(-0.025, table), { pLower: 0.65, move7: -0.01 });
-  assert.deepEqual(oddsFor(-0.2, table), { pLower: 0.8, move7: -0.02 });
-  assert.deepEqual(oddsFor(0.2, table), { pLower: 0.3, move7: 0.02 });
+  assert.deepEqual(oddsFor(-0.025, table), { pLower: 0.65, move7: -0.01, skill: 1 });
+  assert.deepEqual(oddsFor(-0.2, table), { pLower: 0.8, move7: -0.02, skill: 1 });
+  assert.deepEqual(oddsFor(0.2, table), { pLower: 0.3, move7: 0.02, skill: 1 });
+  // A less reliable area: odds scaled halfway toward 50/50, the average move halved.
+  const half = oddsFor(-0.2, table, 0.5);
+  assert.ok(Math.abs(half.pLower - 0.65) < 1e-9 && Math.abs(half.move7 + 0.01) < 1e-9);
   assert.equal(oddsFor(0, []), null);
   assert.equal(oddsFor(NaN, table), null);
   const r = analyze({ series: weekly(20, () => 3.0), now, odds: table });
@@ -251,7 +254,10 @@ test('odds interpolate the calibration table and clamp at its ends', () => {
 });
 
 test('shipped odds tables are well formed', async () => {
-  const { ODDS } = await import('../js/calibration.js');
+  const { ODDS, SKILL } = await import('../js/calibration.js');
+  for (const g of ['regular', 'diesel']) {
+    for (const k of Object.values(SKILL[g])) assert.ok(k >= 0.3 && k <= 1, `${g} skill ${k}`);
+  }
   for (const g of ['regular', 'diesel']) {
     const t = ODDS[g];
     assert.ok(t && t.length >= 5, `${g} table`);
@@ -280,4 +286,26 @@ test('track record scores calls a week out against interpolated reports', async 
   // History keeps 120 days and stays sorted.
   const h = appendHistory({ '2026-01-01': {}, '2026-09-01': {} }, '2026-10-04', { regular: {} });
   assert.deepEqual(Object.keys(h), ['2026-09-01', '2026-10-04']);
+});
+
+test('health: freshness, futures streak, and alerts', async () => {
+  const { healthOf, healthProblems } = await import('../js/health.js');
+  const at = Date.UTC(2026, 9, 4);
+  const d = {
+    areas: { NUS: { prices: { regular: { weekly: [{ date: '2026-09-28', price: 3 }] } } } },
+    wholesale: { rbob: [{ date: '2026-09-29', price: 3 }, { date: '2026-10-02', price: 3.1, est: true }] },
+    source: { futures: { rbob: { symbol: 'RBX26.NYM', added: 1 }, ulsd: { symbol: 'HOX26.NYM', added: 1 } } },
+  };
+  const h = healthOf(d, { futuresFailStreak: 2 }, at);
+  assert.deepEqual({ ...h, checkedAt: undefined }, {
+    checkedAt: undefined, retailAsOf: '2026-09-28', eiaSpotAsOf: '2026-09-29', wholesaleThrough: '2026-10-02',
+    futuresOk: true, futuresFailStreak: 0,
+  });
+  assert.deepEqual(healthProblems(h, at), []);
+  // Futures failing: the streak grows; the third failure in a row alerts.
+  const bad = { ...d, source: { futures: { rbob: { symbol: 'RBX26.NYM', error: 'HTTP 429' } } } };
+  assert.equal(healthOf(bad, { futuresFailStreak: 1 }, at).futuresFailStreak, 2);
+  assert.equal(healthProblems(healthOf(bad, { futuresFailStreak: 2 }, at), at).length, 1);
+  // Stale EIA data alerts on its own.
+  assert.equal(healthProblems(h, at + 12 * DAY).length, 2);
 });

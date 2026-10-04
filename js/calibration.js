@@ -52,3 +52,13 @@ export const ODDS = {
     {"x":0.1312,"p":0.203,"move":0.0622},
   ],
 };
+
+// Per-area reliability k (0.3–1): the odds shown for an area are scaled toward
+// 50/50 as 0.5 + k·(p − 0.5), and the average move by k. Areas with sharp,
+// irregular price cycles score lowest. See docs/BACKTEST.md ("Odds").
+export const SKILL = {
+  regular: {"NUS":1,"YBOS":1,"YORD":0.75,"YCLE":0.54,"YDEN":0.91,"Y44HO":1,"Y05LA":1,"YMIA":1,"Y35NY":1,"Y05SF":0.94,"Y48SE":1,"SCA":1,"SCO":0.96,"SFL":1,"SMA":1,"SMN":1,"SNY":1,"SOH":0.4,"STX":1,"SWA":1,"R1X":1,"R1Y":1,"R1Z":1,"R10":1,"R20":0.92,"R30":1,"R40":0.99,"R50":1,"R5XCA":1},
+  midgrade: {"NUS":1,"YBOS":1,"YORD":0.77,"YCLE":0.56,"YDEN":0.93,"Y44HO":1,"Y05LA":1,"YMIA":1,"Y35NY":1,"Y05SF":0.93,"Y48SE":1,"SCA":1,"SCO":0.99,"SFL":1,"SMA":1,"SMN":1,"SNY":1,"SOH":0.42,"STX":1,"SWA":1,"R1X":1,"R1Y":1,"R1Z":1,"R10":1,"R20":0.89,"R30":1,"R40":0.92,"R50":1,"R5XCA":1},
+  premium: {"NUS":1,"YBOS":1,"YORD":0.79,"YCLE":0.57,"YDEN":0.95,"Y44HO":1,"Y05LA":1,"YMIA":1,"Y35NY":1,"Y05SF":0.94,"Y48SE":0.98,"SCA":1,"SCO":0.98,"SFL":1,"SMA":1,"SMN":1,"SNY":1,"SOH":0.42,"STX":1,"SWA":1,"R1X":1,"R1Y":1,"R1Z":1,"R10":1,"R20":0.96,"R30":1,"R40":0.97,"R50":1,"R5XCA":1},
+  diesel: {"NUS":1,"SCA":1,"R1X":1,"R1Y":1,"R1Z":1,"R10":1,"R20":0.97,"R30":1,"R40":0.95,"R50":1,"R5XCA":1},
+};

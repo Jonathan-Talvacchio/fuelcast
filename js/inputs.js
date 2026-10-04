@@ -4,7 +4,8 @@
 
 import { GRADES } from './regions.js';
 import { parseDate } from './predict.js';
-import { ODDS } from './calibration.js';
+// Namespace import: a briefly cached older calibration.js without SKILL still loads.
+import * as CAL from './calibration.js';
 
 const DAY_MS = 86400000;
 const VERDICT_MAX_AGE_DAYS = 3;   // older saved verdicts are ignored
@@ -53,7 +54,8 @@ export function analysisInputs(data, areaId, g, now = Date.now()) {
       now,
       prevVerdict: savedVerdict(data, found.areaId, g, now),
       // Midgrade and premium follow regular's odds.
-      odds: ODDS[g] || ODDS[grade.outlook] || null,
+      odds: CAL.ODDS[g] || CAL.ODDS[grade.outlook] || null,
+      oddsSkill: (((CAL.SKILL || {})[g] || (CAL.SKILL || {})[grade.outlook] || {})[found.areaId]) ?? 1,
     },
   };
 }
