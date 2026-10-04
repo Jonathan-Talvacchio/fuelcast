@@ -289,6 +289,19 @@ than when it falls (2016–2021: gas at best tied, 72.5% right; diesel fell from
 to 69.7–71.8%) — nor damping the forecast in the Midwest price-cycling areas (full
 strength was best or tied in every area on 2016–2021).
 
+Two more were measured as corrections to the 14-day forecast, fitted on 2016–2021
+and scored on 2022 onward, and also left out:
+
+- **Seasonal fuel-blend switches.** The model's 14-day error does follow the calendar
+  — it under-predicts by about 2¢ in February–March and late summer and over-predicts
+  in July — but a smoothed week-of-year correction moved the decision by only
+  +0.02¢/gal for gas and +0.01¢ for diesel (67.8% → 68.1% right for gas). Wholesale
+  prices already carry most of the switch.
+- **Futures curve** (nearest minus next NYMEX contract, from EIA's contract 1–2
+  series, which end in April 2024). It barely relates to the forecast error
+  (correlation −0.05); on 2022 to April 2024 it changed savings by +0.03¢ for gas and
+  −0.04¢ for diesel — noise — and live use would need a second contract fetched daily.
+
 **Odds.** The verdict card also says how often, historically, the price was lower a
 week after forecasts like today's, and the average move — in money for the user's
 fill-up size. `backtest.mjs --calibrate` builds the table (`js/calibration.js`) from
