@@ -40,7 +40,8 @@ that resolves to:
     "regular": { "R30": [ { "month": "2026-10", "price": 3.59 } ] },
     "diesel":  { "NUS": [ { "month": "2026-10", "price": 3.95 } ] }
   },
-  "wholesale": {                  // daily spot prices, oldest → newest
+  "wholesale": {                  // daily spot prices, oldest → newest; points may carry "est": true
+                                  // (filled from NYMEX futures after EIA's latest posting — see futures.mjs)
     "wti":  [ { "date": "2026-09-09", "price": 97.26 } ],       // $/bbl (optional)
     "rbob": [ { "date": "2026-09-09", "price": 3.289 } ],       // $/gal, required (leads gasoline)
     "ulsd": [ { "date": "2026-09-09", "price": 3.221 } ]        // $/gal, optional (leads diesel)

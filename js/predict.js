@@ -229,7 +229,7 @@ export function analyze({ series, outlook, regionSeries, wholesale, now = Date.n
     const last = arr[arr.length - 1];
     const prior = arr[Math.max(0, arr.length - 1 - n)];
     return { from: prior.price, to: last.price, delta: last.price - prior.price,
-      pct: (last.price - prior.price) / prior.price, asOf: last.date };
+      pct: (last.price - prior.price) / prior.price, asOf: last.date, est: !!last.est };
   };
 
   // Next three months of outlook, offset to this area.

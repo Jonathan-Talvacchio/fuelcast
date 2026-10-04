@@ -25,6 +25,12 @@
 //   decision   a driver who must buy within a week: follow the verdict (buy now,
 //              or wait a week on "wait") vs. always-now, always-wait, and a
 //              perfect-foresight oracle. Reported in cents per gallon.
+//   daily      the same decision made every calendar day, with the data the site
+//              would have had that evening: retail reports published before that
+//              day, and EIA spot prices as EIA posts them (Wednesdays, through
+//              Tuesday) — with and without the NYMEX futures fill
+//              (scripts/providers/futures.mjs). Actual prices between weekly
+//              reports are interpolated.
 
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
@@ -32,6 +38,7 @@ import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { analyze, MODEL, parseDate } from '../js/predict.js';
 import { AREAS, GRADES } from '../js/regions.js';
+import { splice } from './providers/futures.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const args = process.argv.slice(2);
@@ -134,6 +141,28 @@ async function loadHistory() {
   return data;
 }
 
+// Continuous front-month futures (Yahoo Finance, no key) for the daily test.
+// The live job uses a single contract per fill window; the continuous series
+// also carries roll jumps, so this slightly understates the fill.
+async function loadFutures(history) {
+  if (history.futures || flag('site-data')) return;
+  console.error('Downloading futures history (Yahoo Finance)…');
+  const period1 = Math.floor((Date.now() - (YEARS + 0.5) * 365.25 * DAY) / 1000);
+  history.futures = {};
+  for (const [k, sym] of [['rbob', 'RB=F'], ['ulsd', 'HO=F']]) {
+    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(sym)}`
+      + `?period1=${period1}&period2=${Math.floor(Date.now() / 1000)}&interval=1d`;
+    const res = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0 (fuelcast backtest)' } });
+    if (!res.ok) throw new Error(`Yahoo ${sym}: HTTP ${res.status}`);
+    const r = (await res.json()).chart.result[0];
+    const off = (r.meta.gmtoffset ?? -4 * 3600) * 1000;
+    history.futures[k] = r.timestamp
+      .map((t, i) => ({ date: new Date(t * 1000 + off).toISOString().slice(0, 10), price: r.indicators.quote[0].close[i] }))
+      .filter(p => Number.isFinite(p.price));
+  }
+  await writeFile(CACHE, JSON.stringify(history));
+}
+
 // ---- Walk-forward -----------------------------------------------------------
 
 const WARMUP = 26;       // reports before the first evaluation
@@ -163,6 +192,57 @@ function walk(history, grade, useWholesale = true, onlyArea = null) {
     }
   }
   return rows;
+}
+
+const isoDay = ms => new Date(ms).toISOString().slice(0, 10);
+
+// Every calendar day: the verdict a visitor would have seen that day, scored
+// against interpolated actual prices that day and a week later.
+function dailyWalk(history, grade, withFutures, from = '0000') {
+  const lead = GRADES[grade].lead;
+  const spotAll = history.spot[lead] || [];
+  const fut = (history.futures && history.futures[lead]) || [];
+  const rows = [];
+  let flips = 0, pairs = 0;
+  for (const series of Object.values(history.grades[grade])) {
+    const ms = series.map(p => parseDate(p.date));
+    const truth = t => {
+      const i = ms.findIndex(m => m >= t);
+      if (i <= 0) return series[Math.max(i, 0)].price;
+      return series[i - 1].price + (t - ms[i - 1]) / (ms[i] - ms[i - 1]) * (series[i].price - series[i - 1].price);
+    };
+    let ri = 0, si = 0, fi = 0, prev = null;
+    for (let D = ms[WARMUP] + DAY; D + 7 * DAY <= ms[ms.length - 1]; D += DAY) {
+      if (isoDay(D) < from) continue;
+      while (ri < series.length && ms[ri] < D) ri++;           // reports published before today
+      let wed = D - DAY;                                        // EIA's latest Wednesday posting
+      while (new Date(wed).getUTCDay() !== 3) wed -= DAY;
+      const thru = isoDay(wed - DAY);
+      while (si < spotAll.length && spotAll[si].date <= thru) si++;
+      let spot = spotAll.slice(Math.max(0, si - RBOB_WINDOW), si);
+      if (withFutures) {
+        const yesterday = isoDay(D - DAY);
+        while (fi < fut.length && fut[fi].date <= yesterday) fi++;
+        spot = splice(spot, fut.slice(Math.max(0, fi - 15), fi));
+      }
+      const r = analyze({ series: series.slice(Math.max(0, ri - 40), ri), wholesale: { spot }, now: D });
+      const wait = r.verdict.key === 'wait';
+      if (prev !== null) { pairs++; if (prev !== wait) flips++; }
+      prev = wait;
+      rows.push({ wait, t0: truth(D), t7: truth(D + 7 * DAY), est: r.today, last: series[ri - 1].price });
+    }
+  }
+  const now = mean(rows.map(r => r.t0));
+  const model = mean(rows.map(r => (r.wait ? r.t7 : r.t0)));
+  const oracle = mean(rows.map(r => Math.min(r.t0, r.t7)));
+  return {
+    n: rows.length, saved: now - model, captured: (now - model) / (now - oracle || 1),
+    right: mean(rows.map(r => (r.wait === (r.t7 < r.t0) ? 1 : 0))),
+    waitShare: mean(rows.map(r => (r.wait ? 1 : 0))),
+    todayMae: mean(rows.map(r => Math.abs(r.est - r.t0))),
+    todayNaive: mean(rows.map(r => Math.abs(r.last - r.t0))),
+    flipsPerMonth: 30 * flips / (pairs || 1),
+  };
 }
 
 // ---- Metrics ----------------------------------------------------------------
@@ -249,6 +329,8 @@ function withModel(overrides, fn) {
 // ---- Main -------------------------------------------------------------------
 
 const history = await loadHistory();
+await loadFutures(history);
+const DAILY_HOLDOUT = '2022-01-01';   // daily-verdict rows from here on are out of sample
 const results = {};   // grade → { base, noWholesale, perArea, sweep }
 for (const grade of GRADE_IDS) {
   if (!history.grades[grade] || !Object.keys(history.grades[grade]).length) { console.log(`\n(no ${grade} history)`); continue; }
@@ -279,7 +361,21 @@ for (const grade of GRADE_IDS) {
       }
     }
   }
-  results[grade] = { base, noWholesale, perArea, sweep };
+  const daily = [];
+  if (history.futures) {
+    console.log(`\n== ${name} daily verdict (every calendar day) ==`);
+    const since = `${DAILY_HOLDOUT.slice(0, 4)}+`;
+    for (const [label, withFutures, from] of [
+      ['EIA spot only', false, '0000'], ['+ futures fill', true, '0000'],
+      [`EIA spot only, ${since}`, false, DAILY_HOLDOUT], [`+ futures fill, ${since}`, true, DAILY_HOLDOUT],
+    ]) {
+      const m = dailyWalk(history, grade, withFutures, from);
+      daily.push({ label, ...m });
+      console.log(`${label.padEnd(26)} saved ${c(m.saved)}¢ (${pct(m.captured)} of oracle)  right ${pct(m.right)}  wait ${pct(m.waitShare)}  `
+        + `today MAE ${c(m.todayMae)}¢ vs last report ${c(m.todayNaive)}¢  flips ${m.flipsPerMonth.toFixed(1)}/mo`);
+    }
+  }
+  results[grade] = { base, noWholesale, perArea, sweep, daily };
 }
 
 if (flag('report')) {
@@ -308,6 +404,21 @@ function renderReport(results) {
   for (const [g, r] of Object.entries(results)) {
     const m = r.base;
     lines.push(`| ${GRADES[g].name} | ${m.n.toLocaleString()} · ${m.areas} | ${c(m.mae7)}¢ / ${c(m.naive7)}¢ | ${c(m.mae14)}¢ / ${c(m.naive14)}¢ | ${pct(m.in7)} / ${pct(m.in14)} | ${pct(m.dirHit)} | ${c(m.savedVsNow)}¢ | ${pct(m.captured)} |`);
+  }
+  if (Object.values(results).some(r => r.daily.length)) {
+    lines.push('', '## Daily verdict', '',
+      'The weekly test above scores Mondays only, but the site re-runs every evening. This walks every calendar day with what the site would have had: '
+      + 'retail reports published before that day, and EIA spot prices as EIA actually posts them — once a week on Wednesdays, through Tuesday, so 2–8 days old. '
+      + '"+ futures fill" adds the days since EIA\'s latest posting from NYMEX futures (`scripts/providers/futures.mjs`; here continuous front-month history from Yahoo Finance). '
+      + 'Actual prices between weekly reports are linearly interpolated. A driver must buy within a week and follows the verdict: buy now, or in 7 days on "wait". '
+      + `The model constants were set before this test existed and no constant was tuned on ${DAILY_HOLDOUT.slice(0, 4)} onward, so those rows are out of sample.`, '',
+      '| Grade | Variant | Saved vs always-now | Of oracle | Verdict right | Wait share | "Today" error / last report | Wait↔buy flips per month |',
+      '|---|---|---|---|---|---|---|---|');
+    for (const [g, r] of Object.entries(results)) {
+      for (const d of r.daily) {
+        lines.push(`| ${GRADES[g].name} | ${d.label} | ${c(d.saved)}¢ | ${pct(d.captured)} | ${pct(d.right)} | ${pct(d.waitShare)} | ${c(d.todayMae)}¢ / ${c(d.todayNaive)}¢ | ${d.flipsPerMonth.toFixed(1)} |`);
+      }
+    }
   }
   for (const [g, r] of Object.entries(results)) {
     const { base: m, noWholesale: m0, perArea, sweep } = r;

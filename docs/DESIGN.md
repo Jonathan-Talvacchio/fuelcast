@@ -88,6 +88,15 @@ There are two moving parts and nothing else:
 | NY Harbor RBOB gasoline spot, $/gal | `petroleum/pri/spt` | `EER_EPMRU_PF4_Y35NY_DPG` | Daily | Leading indicator for gasoline pump prices |
 | NY Harbor ULSD diesel spot, $/gal | `petroleum/pri/spt` | `EER_EPD2DXL0_PF4_Y35NY_DPG` | Daily | Leading indicator for diesel pump prices |
 | WTI crude spot, $/bbl | `petroleum/pri/spt` | `RWTC` | Daily | Context in "what's driving prices" |
+| NYMEX RBOB / ULSD futures settlements | Yahoo Finance chart endpoint (no key, unofficial) | second-nearest contract, e.g. `RBX26.NYM`, `HOX26.NYM` | Daily, same evening | Fills the days since EIA's latest spot posting (`scripts/providers/futures.mjs`) |
+
+EIA's spot series are daily *values* but are **posted once a week** (Wednesdays, through
+Tuesday), so on any given evening the latest EIA wholesale price is 2–8 days old. The
+data job fills the gap with each day's futures change since EIA's latest date
+(`spot_last + futures(d) − futures(spot_last date)`), flags those points `est: true`, and
+falls back to EIA alone if the futures fetch fails. The second-nearest contract is used
+because the front contract can expire inside the fill window, and gasoline's spring and
+fall rolls jump 20¢+ between contracts.
 
 ### 5.2 Normalized contract (`data/prices.json`)
 
@@ -247,6 +256,17 @@ reliably). Its sweep shows a lower pass-through (0.35) would cut its forecast er
 further (3.7¢) at a small cost in savings, so the shared constants were kept —
 the site optimizes for the decision, not the point forecast.
 
+**Daily verdict.** The weekly test scores Mondays only; the site re-runs every evening.
+The backtest also walks every calendar day with the data the site would have had that
+evening (including EIA's weekly posting lag for spot prices), scoring against prices
+interpolated between reports. The futures fill is the largest gain found: on
+2022 onward (out of sample) regular-gas verdicts go from 64% to 68% right and from
+1.14¢ to 1.46¢/gal saved; diesel from 66% to 71% and 1.28¢ to 1.82¢. The cost is a
+more responsive verdict: it switches between wait and buy about 3 times a month
+instead of 1.6. Retuning `passThrough` / `leadLookbackDays`, a pump-vs-wholesale margin
+reversion term, a 7-day verdict horizon and regional wholesale hubs (Gulf Coast, Los
+Angeles) were also tried on the daily test and did not improve the decision.
+
 ## 8. User interface
 
 Single page, mobile-first, no framework. Reading order matches decision order:
@@ -311,5 +331,8 @@ Breakpoints at 760px (single column, 2×2 price tiles, shorter chart) and 400px
 2. **Custom domain** — DNS A/CNAME records to GitHub Pages; no code change.
 3. **Backtesting the outlook anchor** — needs archived STEO vintages (EIA publishes
    them as monthly files, not through the API); would let the full model be tested.
-4. **Model refinements** — day-of-week seasonality if a daily source is added;
+4. **Verdict hysteresis** — keep yesterday's call unless the signal clears the threshold
+   by ~1¢; in the daily backtest this cuts wait↔buy switches by about a third at no cost
+   in savings. Needs the previous verdict stored in the data file.
+5. **Model refinements** — day-of-week seasonality if a daily source is added;
    regional pass-through factors; a hurricane-season prior for Gulf Coast areas.

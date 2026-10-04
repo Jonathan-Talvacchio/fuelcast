@@ -174,3 +174,23 @@ test('analyze accepts wholesale.spot and falls back to wholesale.rbob', () => {
   assert.ok(a.drivers.wholesaleEffect > 0);
   assert.ok(a.drivers.spot && a.drivers.spot.delta > 0);
 });
+
+test('futures fill uses the second-nearest contract', async () => {
+  const { contractFor } = await import('./providers/futures.mjs');
+  assert.equal(contractFor('RB', '2026-09-29'), 'RBX26.NYM');
+  assert.equal(contractFor('HO', '2026-11-03'), 'HOF27.NYM');
+  assert.equal(contractFor('RB', '2026-12-31'), 'RBG27.NYM');
+});
+
+test('futures fill extends spot by futures changes, flagged as estimates', async () => {
+  const { splice } = await import('./providers/futures.mjs');
+  const spot = [{ date: '2026-09-28', price: 3.4 }, { date: '2026-09-29', price: 3.3 }];
+  const fut = [{ date: '2026-09-29', price: 3.1 }, { date: '2026-09-30', price: 3.15 }, { date: '2026-10-01', price: 3.05 }];
+  const out = splice(spot, fut);
+  assert.deepEqual(out.slice(2), [{ date: '2026-09-30', price: 3.35, est: true }, { date: '2026-10-01', price: 3.25, est: true }]);
+  assert.equal(splice(spot, []), spot);
+  assert.equal(splice(spot, [{ date: '2026-10-01', price: 3 }]), spot);   // no base on or before the last spot day
+  assert.equal(splice(spot, fut, 1).length, 3);                            // capped fill window
+  const r = analyze({ series: weekly(20, () => 3.0), wholesale: { spot: out }, now });
+  assert.equal(r.drivers.spot.est, true);
+});

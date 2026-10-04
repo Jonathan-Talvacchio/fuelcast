@@ -8,7 +8,8 @@ prices are headed — using free public data, hosted for free on GitHub Pages.
   gasoline (regular, midgrade, premium) and diesel across the U.S., 5 regions (+3
   East Coast sub-regions), 9 states and 10 metros (diesel: regions and California);
   EIA's official monthly price outlook; daily wholesale gasoline (RBOB), diesel (ULSD)
-  and crude (WTI) spot prices.
+  and crude (WTI) spot prices. EIA posts those spot prices weekly, so the days since
+  are filled from NYMEX futures settlements (Yahoo Finance, no key).
 - **Predictions:** a transparent heuristic (recent momentum + wholesale pass-through +
   EIA outlook trajectory) with an uncertainty band. See "How this works" on the page
   and `js/predict.js`.

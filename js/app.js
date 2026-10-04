@@ -203,7 +203,7 @@ function renderDrivers(r, g) {
     const what = g.lead === 'ulsd' ? 'Wholesale diesel (ULSD)' : 'Wholesale gasoline';
     items.push({
       ico: '🛢️', t: `${what} ${chip(w.delta, `${(w.pct * 100).toFixed(1)}%`)} <span class="muted">${money(w.to)}/gal (${esc(fmtDate(w.asOf))})</span>`,
-      d: `NY Harbor spot price over the last ~2 weeks. Pump prices usually follow within 1–2 weeks: ${Math.abs(eff) < 0.005 ? 'little effect expected' : `roughly ${eff > 0 ? '+' : '−'}${cents(eff)} at the pump`}.`,
+      d: `NY Harbor spot price over the last ~2 weeks${w.est ? ' (latest days estimated from NYMEX futures)' : ''}. Pump prices usually follow within 1–2 weeks: ${Math.abs(eff) < 0.005 ? 'little effect expected' : `roughly ${eff > 0 ? '+' : '−'}${cents(eff)} at the pump`}.`,
     });
   }
   if (r.drivers.wti) {

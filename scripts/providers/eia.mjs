@@ -4,6 +4,7 @@
 // Emits the normalized shape described in scripts/providers/README.md.
 
 import { AREAS, GRADES } from '../../js/regions.js';
+import { extendWithFutures } from './futures.mjs';
 
 const BASE = 'https://api.eia.gov/v2';
 // The site uses ~13 weeks; 40 keeps `backtest.mjs --site-data` (26-report warm-up) working.
@@ -125,10 +126,10 @@ export async function fetchPrices({ apiKey }) {
     const price = num(r.value);
     if (k && Number.isFinite(price)) wholesale[k].push({ date: r.period, price });
   }
-  for (const k of Object.keys(wholesale)) {
-    wholesale[k].sort(byDateAsc);
-    wholesale[k] = wholesale[k].slice(-WHOLESALE_DAYS);
-  }
+  for (const k of Object.keys(wholesale)) wholesale[k].sort(byDateAsc);
+  // EIA posts spot prices weekly; fill the days since from NYMEX futures.
+  for (const line of await extendWithFutures(wholesale)) console.log(`Wholesale: ${line}`);
+  for (const k of Object.keys(wholesale)) wholesale[k] = wholesale[k].slice(-WHOLESALE_DAYS);
 
   return {
     generatedAt: new Date().toISOString(),
@@ -137,7 +138,7 @@ export async function fetchPrices({ apiKey }) {
       name: 'U.S. Energy Information Administration',
       url: 'https://www.eia.gov/petroleum/gasdiesel/',
       cadence: 'weekly',
-      note: 'Weekly retail prices for regular, midgrade and premium gasoline (all formulations) and on-highway diesel, posted Mondays. Outlook from the EIA Short-Term Energy Outlook. Wholesale from EIA daily spot prices.',
+      note: 'Weekly retail prices for regular, midgrade and premium gasoline (all formulations) and on-highway diesel, posted Mondays. Outlook from the EIA Short-Term Energy Outlook. Wholesale from EIA daily spot prices, with days since EIA's latest weekly posting estimated from NYMEX futures.',
     },
     grades: Object.fromEntries(Object.entries(GRADES).map(([g, x]) => [g, { name: x.name, lead: x.lead, outlook: x.outlook }])),
     areas,
