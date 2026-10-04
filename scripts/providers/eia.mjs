@@ -138,7 +138,7 @@ export async function fetchPrices({ apiKey }) {
       name: 'U.S. Energy Information Administration',
       url: 'https://www.eia.gov/petroleum/gasdiesel/',
       cadence: 'weekly',
-      note: 'Weekly retail prices for regular, midgrade and premium gasoline (all formulations) and on-highway diesel, posted Mondays. Outlook from the EIA Short-Term Energy Outlook. Wholesale from EIA daily spot prices, with days since EIA's latest weekly posting estimated from NYMEX futures.',
+      note: 'Weekly retail prices for regular, midgrade and premium gasoline (all formulations) and on-highway diesel, posted Mondays. Outlook from the EIA Short-Term Energy Outlook. Wholesale from EIA daily spot prices, with the days since EIA posted them estimated from NYMEX futures.',
     },
     grades: Object.fromEntries(Object.entries(GRADES).map(([g, x]) => [g, { name: x.name, lead: x.lead, outlook: x.outlook }])),
     areas,

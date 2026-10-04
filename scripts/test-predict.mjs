@@ -194,3 +194,8 @@ test('futures fill extends spot by futures changes, flagged as estimates', async
   const r = analyze({ series: weekly(20, () => 3.0), wholesale: { spot: out }, now });
   assert.equal(r.drivers.spot.est, true);
 });
+
+test('data providers load', async () => {
+  const eia = await import('./providers/eia.mjs');
+  assert.equal(typeof eia.fetchPrices, 'function');
+});
