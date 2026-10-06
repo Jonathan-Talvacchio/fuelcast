@@ -6,8 +6,15 @@
     <atom:link href="https://jonathan-talvacchio.github.io/fuelcast/data/feeds/regular-YMIA.xml" rel="self" type="application/rss+xml"/>
     <description>An item each time Fuelcast&apos;s buy-or-wait advice for gas in Miami changes.</description>
     <language>en-us</language>
-    <lastBuildDate>Sun, 04 Oct 2026 21:00:00 GMT</lastBuildDate>
+    <lastBuildDate>Tue, 06 Oct 2026 21:00:00 GMT</lastBuildDate>
     <ttl>720</ttl>
+    <item>
+      <title>Miami gas: No rush — fill when convenient</title>
+      <link>https://jonathan-talvacchio.github.io/fuelcast/#area%3AYMIA</link>
+      <guid isPermaLink="false">fuelcast-regular-YMIA-2026-10-06-ok</guid>
+      <pubDate>Tue, 06 Oct 2026 21:00:00 GMT</pubDate>
+      <description>Fuelcast&apos;s advice for gas in Miami changed to &quot;No rush — fill when convenient&quot; on 2026-10-06. Open the page for today&apos;s prices, the odds and the forecast.</description>
+    </item>
     <item>
       <title>Miami gas: Fill up now</title>
       <link>https://jonathan-talvacchio.github.io/fuelcast/#area%3AYMIA</link>
