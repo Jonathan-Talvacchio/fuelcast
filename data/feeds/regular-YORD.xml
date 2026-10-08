@@ -6,8 +6,15 @@
     <atom:link href="https://jonathan-talvacchio.github.io/fuelcast/data/feeds/regular-YORD.xml" rel="self" type="application/rss+xml"/>
     <description>An item each time Fuelcast&apos;s buy-or-wait advice for gas in Chicago changes.</description>
     <language>en-us</language>
-    <lastBuildDate>Wed, 07 Oct 2026 21:00:00 GMT</lastBuildDate>
+    <lastBuildDate>Thu, 08 Oct 2026 21:00:00 GMT</lastBuildDate>
     <ttl>720</ttl>
+    <item>
+      <title>Chicago gas: Wait if you can — top off only</title>
+      <link>https://jonathan-talvacchio.github.io/fuelcast/#area%3AYORD</link>
+      <guid isPermaLink="false">fuelcast-regular-YORD-2026-10-08-wait</guid>
+      <pubDate>Thu, 08 Oct 2026 21:00:00 GMT</pubDate>
+      <description>Fuelcast&apos;s advice for gas in Chicago changed to &quot;Wait if you can — top off only&quot; on 2026-10-08. Open the page for today&apos;s prices, the odds and the forecast.</description>
+    </item>
     <item>
       <title>Chicago gas: Fill up now</title>
       <link>https://jonathan-talvacchio.github.io/fuelcast/#area%3AYORD</link>
