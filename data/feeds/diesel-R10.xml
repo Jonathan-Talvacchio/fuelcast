@@ -6,8 +6,15 @@
     <atom:link href="https://jonathan-talvacchio.github.io/fuelcast/data/feeds/diesel-R10.xml" rel="self" type="application/rss+xml"/>
     <description>An item each time Fuelcast&apos;s buy-or-wait advice for diesel in East Coast changes.</description>
     <language>en-us</language>
-    <lastBuildDate>Thu, 08 Oct 2026 21:00:00 GMT</lastBuildDate>
+    <lastBuildDate>Fri, 09 Oct 2026 21:00:00 GMT</lastBuildDate>
     <ttl>720</ttl>
+    <item>
+      <title>East Coast diesel: Fill up now</title>
+      <link>https://jonathan-talvacchio.github.io/fuelcast/#area%3AR10/diesel</link>
+      <guid isPermaLink="false">fuelcast-diesel-R10-2026-10-09-now</guid>
+      <pubDate>Fri, 09 Oct 2026 21:00:00 GMT</pubDate>
+      <description>Fuelcast&apos;s advice for diesel in East Coast changed to &quot;Fill up now&quot; on 2026-10-09. Open the page for today&apos;s prices, the odds and the forecast.</description>
+    </item>
     <item>
       <title>East Coast diesel: Wait if you can — top off only</title>
       <link>https://jonathan-talvacchio.github.io/fuelcast/#area%3AR10/diesel</link>
